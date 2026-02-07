@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (karaoke.hit >= 8 && !karaoke.done) {
       karaoke.done = true;
       running = false;
-      showNextOverlay("Cleared!", "Next: Ice skating (faster) + obstacles.", "Next: Ice skating", () => {
+      showNextOverlay("Cleared!", "Next: Ice skating (faster) with moving obstacles.", "Next: Ice skating", () => {
         setScene(1);
         overlay.hidden = true;
         running = true;
@@ -474,37 +474,142 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(`Hit: ${karaoke.hit}/8   Miss: ${karaoke.miss}`, 16, 22);
   }
 
-  /* ---------------- Ice skating (FASTER + OBSTACLES) ---------------- */
+  /* ---------------- Ice skating (FASTER + MOVING OBSTACLES + FEWER) ---------------- */
+
   function makeSkateObstacles(w, h) {
     const obs = [];
-    const count = 8; // more obstacles, more obvious
+    const count = 5; // fewer so it doesn't block the map
+
+    const marginX = w * 0.08;
+    const minY = h * 0.20;
+    const maxY = h * 0.86;
 
     for (let i = 0; i < count; i++) {
-      const ww = rand(w * 0.14, w * 0.26);
-      const hh = rand(24, 34);
-      const x = rand(w * 0.08, w * 0.92 - ww);
-      const y = rand(h * 0.18, h * 0.86 - hh);
-      obs.push({ x, y, w: ww, h: hh });
+      const ww = rand(w * 0.12, w * 0.18);
+      const hh = rand(20, 28);
+
+      const y = rand(minY, maxY - hh);
+      const baseX = rand(marginX, w - marginX - ww);
+
+      const ampRaw = rand(w * 0.06, w * 0.11);
+      const speed = rand(1.2, 2.2);
+      const phase = rand(0, Math.PI * 2);
+
+      obs.push({
+        x: baseX,
+        y,
+        w: ww,
+        h: hh,
+        baseX,
+        amp: ampRaw,
+        speed,
+        phase
+      });
     }
     return obs;
+  }
+
+  function updateSkateObstacles(dt) {
+    if (!skate) return;
+    skate.t += dt;
+    const w = W();
+    const margin = w * 0.06;
+
+    for (const o of skate.obstacles) {
+      const minX = margin;
+      const maxX = w - margin - o.w;
+
+      const maxAmp = Math.max(0, Math.min(o.amp, o.baseX - minX, maxX - o.baseX));
+      const target = o.baseX + Math.sin(skate.t * o.speed + o.phase) * maxAmp;
+
+      o.x = clamp(target, minX, maxX);
+    }
+  }
+
+  function safeTokenPos(x, y, obstacles, radius) {
+    for (const o of obstacles) {
+      const r = { x: o.x - radius, y: o.y - radius, w: o.w + radius * 2, h: o.h + radius * 2 };
+      if (circleRectHit(x, y, 1, r)) return false;
+    }
+    return true;
   }
 
   function initSkate() {
     const w = W(), h = H();
     skate = {
       player: { x: w * 0.45, y: h * 0.55, vx: 0, vy: 0 },
-      pr: 26,
+      pr: 20,                  // smaller collider so it's easier to weave
       collected: 0,
       goal: 6,
       tokens: [],
       obstacles: makeSkateObstacles(w, h),
       bonkCd: 0,
-      done: false
+      done: false,
+      t: 0
     };
 
+    // Place tokens so they aren't stuck behind obstacles
+    const tokenMinDist = 56;
     for (let i = 0; i < skate.goal; i++) {
-      skate.tokens.push({ x: rand(70, w - 70), y: rand(70, h - 70), alive: true });
+      let placed = false;
+      for (let tries = 0; tries < 60 && !placed; tries++) {
+        const x = rand(60, w - 60);
+        const y = rand(70, h - 70);
+
+        if (!safeTokenPos(x, y, skate.obstacles, 34)) continue;
+
+        let ok = true;
+        for (const t of skate.tokens) {
+          if (dist(x, y, t.x, t.y) < tokenMinDist) { ok = false; break; }
+        }
+        if (!ok) continue;
+
+        skate.tokens.push({ x, y, alive: true });
+        placed = true;
+      }
+
+      if (!placed) {
+        skate.tokens.push({ x: rand(60, w - 60), y: rand(70, h - 70), alive: true });
+      }
     }
+  }
+
+  // Lightweight skater icon (faster than emoji drawing on some devices)
+  function drawSkater(x, y, scale = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // Two heads
+    ctx.fillStyle = "rgba(107,22,55,0.92)";
+    ctx.beginPath(); ctx.arc(-8, -14, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(8, -14, 6, 0, Math.PI * 2); ctx.fill();
+
+    // Bodies
+    ctx.strokeStyle = "rgba(107,22,55,0.92)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-8, -8); ctx.lineTo(-10, 6); // left
+    ctx.moveTo(8, -8);  ctx.lineTo(10, 6);  // right
+    ctx.stroke();
+
+    // Skates
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-18, 10); ctx.lineTo(-2, 10);
+    ctx.moveTo(2, 10);   ctx.lineTo(18, 10);
+    ctx.stroke();
+
+    // Heart between them
+    ctx.fillStyle = "rgba(255,47,116,0.9)";
+    ctx.font = "14px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("❤", 0, -2);
+
+    ctx.restore();
   }
 
   function updateSkate(dt) {
@@ -512,6 +617,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const p = skate.player;
 
     skate.bonkCd = Math.max(0, skate.bonkCd - dt);
+
+    // Move obstacles first so collision uses current position
+    updateSkateObstacles(dt);
 
     let ax = 0, ay = 0;
     if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
@@ -522,16 +630,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // FAST ICE SKATING
-    const accel = 1500;
-    const maxSpeed = 520;
+    // MUCH FASTER skating
+    const accel = 2400;
+    const maxSpeed = 820;
 
     p.vx += ax * accel * dt;
     p.vy += ay * accel * dt;
 
-    if (input.down) steerToward(p, input.x, input.y, 900, dt);
+    // Mobile steering stronger
+    if (input.down) steerToward(p, input.x, input.y, 1700, dt);
 
-    const damp = dampFactor(0.86, dt);
+    // Less damping so it feels snappy
+    const damp = dampFactor(0.90, dt);
     p.vx *= damp;
     p.vy *= damp;
 
@@ -550,17 +660,18 @@ document.addEventListener("DOMContentLoaded", () => {
       []
     );
 
-    // Bonk feedback (detect only, do not resolve again)
+    // Bonk feedback (cooldown)
     if (skate.bonkCd === 0) {
       for (const r of skate.obstacles) {
         if (circleRectHit(p.x, p.y, skate.pr, r)) {
-          skate.bonkCd = 0.25;
+          skate.bonkCd = 0.20;
           showToast("Bonk!");
           break;
         }
       }
     }
 
+    // Collect
     for (const t of skate.tokens) {
       if (!t.alive) continue;
       if (dist(p.x, p.y, t.x, t.y) < 34) {
@@ -575,7 +686,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (skate.collected >= skate.goal && !skate.done) {
       skate.done = true;
       running = false;
-      showNextOverlay("Cleared!", "Final: Swimming (slower) + obstacles.", "Next: Swimming", () => {
+      showNextOverlay("Cleared!", "Final: Swimming tag.", "Next: Swimming", () => {
         setScene(2);
         overlay.hidden = true;
         running = true;
@@ -591,25 +702,28 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillStyle = "rgba(210,240,255,0.28)";
     ctx.fillRect(0, 0, w, h);
 
+    // Ice stripes
     ctx.fillStyle = "rgba(255,255,255,0.22)";
     for (let i = 0; i < 8; i++) ctx.fillRect(w * 0.1, h * (0.15 + i * 0.1), w * 0.8, 4);
 
-    // OBSTACLES: very visible
+    // Moving obstacles (left-right)
     for (const r of skate.obstacles) {
-      ctx.fillStyle = "rgba(35,80,120,0.35)";
+      ctx.fillStyle = "rgba(35,80,120,0.30)";
       roundRect(r.x, r.y, r.w, r.h, 12, true);
 
       ctx.strokeStyle = "rgba(255,255,255,0.65)";
       ctx.lineWidth = 2;
       ctx.strokeRect(r.x, r.y, r.w, r.h);
 
-      ctx.font = "24px system-ui";
+      // Direction hint
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.font = "18px system-ui";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.fillText("🧊", r.x + r.w / 2, r.y + r.h / 2);
+      ctx.fillText("↔", r.x + r.w / 2, r.y + r.h / 2);
     }
 
+    // Tokens
     for (const t of skate.tokens) {
       if (!t.alive) continue;
       ctx.font = "30px system-ui";
@@ -618,10 +732,8 @@ document.addEventListener("DOMContentLoaded", () => {
       ctx.fillText("❄️💗", t.x, t.y);
     }
 
-    ctx.font = "46px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("👫", skate.player.x, skate.player.y);
+    // Player (lightweight draw)
+    drawSkater(skate.player.x, skate.player.y, 1);
 
     ctx.fillStyle = "rgba(107,22,55,0.9)";
     ctx.font = "14px system-ui";
@@ -630,10 +742,10 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(`Collected: ${skate.collected}/${skate.goal}   Obstacles: ${skate.obstacles.length}`, 16, 22);
   }
 
-  /* ---------------- Swimming (SLOWER + BUOY OBSTACLES) ---------------- */
+  /* ---------------- Swimming (kept from v10: slower + buoys) ---------------- */
   function makeBuoys(pool) {
     const buoys = [];
-    const count = 9; // more buoys, more obvious
+    const count = 9;
     for (let i = 0; i < count; i++) {
       const r = rand(18, 28);
       buoys.push({
@@ -698,7 +810,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // SLOWER SWIMMING (was too fast)
+    // slower swimming
     const guyAccel = 1500;
     const guyMax = 520;
 
@@ -719,17 +831,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!swim.caught) {
       const catchRadius = 52;
-
       const fleeBoost = clamp((330 - d) / 330, 0, 1);
 
-      // Girl scales but not insane
       const girlAccel = 1250 * (0.55 + 0.75 * fleeBoost);
       const girlMax = 560 * (0.70 + 0.45 * fleeBoost);
 
       girl.vx += (dx / d) * girlAccel * dt;
       girl.vy += (dy / d) * girlAccel * dt;
 
-      // avoid buoys (repulsion)
       for (const b of swim.buoys) {
         const bx = girl.x - b.x;
         const by = girl.y - b.y;
@@ -742,7 +851,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // wall avoidance
       const m = 70;
       const cx = p.x + p.w * 0.5;
       const cy = p.y + p.h * 0.5;
@@ -834,7 +942,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.lineWidth = 2;
     ctx.strokeRect(p.x, p.y, p.w, p.h);
 
-    // BUOYS: super visible
     for (const b of swim.buoys) {
       ctx.fillStyle = "rgba(255,47,116,0.14)";
       ctx.beginPath();
@@ -959,9 +1066,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (miniRow1) miniRow1.textContent = "Goal: Hit 8 notes.";
       if (miniRow2) miniRow2.textContent = "Tap anywhere (or Space).";
     } else if (scene === 1) {
-      if (subtitleEl) subtitleEl.textContent = "Mini-game 2: Ice skating. Faster movement + obstacles.";
+      if (subtitleEl) subtitleEl.textContent = "Mini-game 2: Ice skating. Faster movement + moving obstacles.";
       if (miniRow1) miniRow1.textContent = "Goal: Collect 6 snow hearts.";
-      if (miniRow2) miniRow2.textContent = "Avoid the ice blocks.";
+      if (miniRow2) miniRow2.textContent = "Obstacles slide left-right.";
     } else {
       if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. Slower chase + buoy obstacles.";
       if (miniRow1) miniRow1.textContent = "Goal: Catch her once.";
@@ -982,7 +1089,7 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.textContent = "Start karaoke";
     } else if (scene === 1) {
       overlayTitle.textContent = "Ice skating";
-      overlayText.textContent = "Now faster. Collect 6 snow hearts. Dodge obstacles.";
+      overlayText.textContent = "Now faster. Collect 6 snow hearts. Obstacles move left-right.";
       startBtn.textContent = "Start skating";
     } else {
       overlayTitle.textContent = "Swimming tag";
