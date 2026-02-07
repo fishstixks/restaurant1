@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Arcade Quest</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <title>Valentine Arcade Quest</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="bg-hearts" aria-hidden="true"></div>
@@ -12,25 +12,7 @@
   <main class="wrap">
     <section class="card">
       <header class="top">
-        <div class="badge" aria-label="Corgi logo">
-          <svg class="corgi" viewBox="0 0 120 120" role="img" aria-label="corgi">
-            <defs>
-              <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#ffcf8a"/>
-                <stop offset="1" stop-color="#f6b35f"/>
-              </linearGradient>
-            </defs>
-            <circle cx="60" cy="62" r="38" fill="url(#fur)"/>
-            <circle cx="60" cy="68" r="26" fill="#fff3e6" opacity="0.95"/>
-            <path d="M28 48 L18 28 L38 34 Z" fill="url(#fur)"/>
-            <path d="M92 48 L102 28 L82 34 Z" fill="url(#fur)"/>
-            <circle cx="46" cy="62" r="5" fill="#3a2a2a"/>
-            <circle cx="74" cy="62" r="5" fill="#3a2a2a"/>
-            <circle cx="60" cy="74" r="6" fill="#3a2a2a"/>
-            <path d="M52 82 Q60 90 68 82" stroke="#3a2a2a" stroke-width="4" fill="none" stroke-linecap="round"/>
-            <path d="M44 72 Q60 66 76 72" stroke="#e7bdb0" stroke-width="5" fill="none" opacity="0.7" stroke-linecap="round"/>
-          </svg>
-        </div>
+        <div class="badge">🎮💗</div>
 
         <div class="progress">
           <div class="dot on" id="dot0" title="Karaoke"></div>
@@ -44,12 +26,12 @@
         </div>
       </header>
 
-      <h1>Arcade Quest</h1>
-      <p class="sub" id="subtitle">Beat 3 mini-games. Touch and keyboard both work.</p>
+      <h1>Valentine Arcade Quest</h1>
+      <p class="sub" id="subtitle">Beat 3 mini-games. Touch works. Keyboard works too.</p>
 
       <div class="controls">
-        <div class="pill">Karaoke: tap anywhere on beat (or Space)</div>
-        <div class="pill">Move: WASD / Arrow keys, or hold and drag</div>
+        <div class="pill">Tap anywhere to play</div>
+        <div class="pill">WASD / Arrow keys supported</div>
         <div class="pill">Restart: R</div>
       </div>
 
@@ -59,7 +41,7 @@
         <div class="overlay" id="overlay">
           <div class="overlayCard">
             <div class="overlayTitle" id="overlayTitle">Karaoke</div>
-            <div class="overlayText" id="overlayText">Tap when the note hits the line.</div>
+            <div class="overlayText" id="overlayText">Tap when the falling note hits the line.</div>
             <button class="btn yes" id="startBtn">Start</button>
           </div>
         </div>
@@ -74,12 +56,13 @@
     </section>
   </main>
 
-  <div class="modal" id="valModal">
+  <!-- Valentine popup -->
+  <div class="modal" id="valModal" aria-hidden="true">
     <div class="burnCard">
       <div class="burnGlow" aria-hidden="true"></div>
       <div class="burnInner">
         <div class="burnTitle">Will you be my Valentine?</div>
-        <div class="burnSub" id="burnSub">I LOVE YOU FRONDOZO JULIE ANN SEMIRA NOSEJOB LOVEYDUBS</div>
+        <div class="burnSub" id="burnSub">Choose wisely.</div>
 
         <div class="burnBtns" id="burnBtns">
           <button class="btn yes bigYes" id="modalYes">Yes 💖</button>
@@ -91,17 +74,24 @@
     </div>
   </div>
 
-  <div class="modal" id="flowersModal">
-    <div class="flowersCard">
-      <div class="flowersTitle">Awww 💜🤍❤️</div>
-      <div class="flowersBox">
-        <div class="bouquet">💐🌸🌷🌹🪻🌼</div>
-        <div class="flowersText">I LOVE YOU FRONDOZO JULIE ANN SEMIRA NOSEJOB LOVEYDUBS</div>
+  <!-- Bouquet gift popup (shows after YES) -->
+  <div class="modal" id="giftModal" aria-hidden="true">
+    <div class="burnCard">
+      <div class="burnGlow" aria-hidden="true"></div>
+      <div class="burnInner">
+        <div class="burnTitle">Bouquet Gift!</div>
+        <div class="giftBouquet" aria-hidden="true">💐</div>
+        <div class="burnSub">A bouquet of flowers for you.</div>
+
+        <div class="burnBtns">
+          <button class="btn yes bigYes" id="giftRestart">Play again</button>
+        </div>
+
+        <div class="tiny">Press R anytime to restart.</div>
       </div>
-      <button class="btn yes" id="flowersRestart">Play again</button>
     </div>
   </div>
 
-  <script src="script.js?v=3"></script>
+  <script src="script.js"></script>
 </body>
 </html>
