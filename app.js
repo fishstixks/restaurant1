@@ -393,12 +393,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (karaoke.hit >= 8 && !karaoke.done) {
       karaoke.done = true;
       running = false;
-      showNextOverlay("Cleared!", "Next: Ice skating. Ice zones are not physical, but touching them makes you slip + reset.", "Next: Ice skating", () => {
-        setScene(1);
-        overlay.hidden = true;
-        running = true;
-        resetSceneState();
-      });
+      showNextOverlay(
+        "Cleared!",
+        "Next: Ice skating. Ice zones are non-physical, touching them makes you slip and reset to middle.",
+        "Next: Ice skating",
+        () => {
+          setScene(1);
+          overlay.hidden = true;
+          running = true;
+          resetSceneState();
+        }
+      );
     }
   }
   function drawKaraoke() {
@@ -456,23 +461,53 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(`Hit: ${karaoke.hit}/8   Miss: ${karaoke.miss}`, 16, 22);
   }
 
-  /* ---------------- Ice skating: non-physical slip zones ---------------- */
-  function makeIceZones(w, h) {
+  /* ---------------- Ice skating: safer spawn + slower ice ---------------- */
+  function makeIceZones(w, h, spawnX, spawnY, spawnSafeR) {
     const zones = [];
-    const count = 4;
+    const count = 3; // fewer so it cannot clump and insta-trigger
 
     const minY = h * 0.22;
     const maxY = h * 0.84;
 
     for (let i = 0; i < count; i++) {
-      const zw = rand(w * 0.16, w * 0.28);
-      const zh = rand(22, 36);
-      const y = rand(minY, maxY - zh);
+      let placed = false;
 
-      const x = rand(-zw, w);
-      const vx = rand(320, 520) * (Math.random() < 0.5 ? -1 : 1);
-      zones.push({ x, y, w: zw, h: zh, vx });
+      for (let tries = 0; tries < 120 && !placed; tries++) {
+        const zw = rand(w * 0.16, w * 0.26);
+        const zh = rand(22, 34);
+
+        // distribute y by bands, away from spawnY
+        const bandH = (maxY - minY) / count;
+        const by = minY + i * bandH;
+        let y = rand(by, by + bandH - zh);
+
+        // keep away from spawn's y band
+        if (Math.abs((y + zh * 0.5) - spawnY) < spawnSafeR * 0.9) continue;
+
+        // start off-center, so nothing begins "in the middle"
+        let x = rand(-zw - 80, w + 80);
+        if (Math.abs((x + zw * 0.5) - spawnX) < spawnSafeR * 1.2) continue;
+
+        const vx = rand(170, 290) * (Math.random() < 0.5 ? -1 : 1);
+
+        const rect = { x, y, w: zw, h: zh };
+        if (circleRectHit(spawnX, spawnY, spawnSafeR, rect)) continue;
+
+        zones.push({ x, y, w: zw, h: zh, vx });
+        placed = true;
+      }
+
+      if (!placed) {
+        // fallback: put far left/right
+        const zw = w * 0.18;
+        const zh = 28;
+        const y = minY + i * ((maxY - minY) / count);
+        const x = (i % 2 === 0) ? (-zw - 60) : (w + 60);
+        const vx = (i % 2 === 0) ? rand(180, 260) : -rand(180, 260);
+        zones.push({ x, y, w: zw, h: zh, vx });
+      }
     }
+
     return zones;
   }
 
@@ -496,28 +531,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function initSkate() {
     const w = W(), h = H();
+    const spawnX = w * 0.5;
+    const spawnY = h * 0.55;
+
     skate = {
-      player: { x: w * 0.5, y: h * 0.55, vx: 0, vy: 0 },
+      player: { x: spawnX, y: spawnY, vx: 0, vy: 0 },
       pr: 14,
       goal: 6,
       collected: 0,
       tokens: [],
-      ice: makeIceZones(w, h),
+
+      // ice is placed away from spawn and slower
+      ice: makeIceZones(w, h, spawnX, spawnY, 120),
 
       slipping: false,
       slipT: 0,
-      slipDur: 0.60,
+      slipDur: 0.55,
       slipCd: 0,
       prevOnIce: false,
-      lastHitVx: 0
+      lastHitVx: 0,
+
+      // spawn grace prevents instant slip even if an ice zone passes early
+      spawnGrace: 0.80
     };
 
     const tokenMinDist = 66;
     for (let i = 0; i < skate.goal; i++) {
       let placed = false;
-      for (let tries = 0; tries < 90 && !placed; tries++) {
+      for (let tries = 0; tries < 120 && !placed; tries++) {
         const x = rand(70, w - 70);
         const y = rand(80, h - 80);
+
+        // avoid spawn zone too
+        if (dist(x, y, spawnX, spawnY) < 130) continue;
 
         if (!safeTokenPos(x, y, skate.ice, 56)) continue;
 
@@ -556,15 +602,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function drawIceZone(z) {
     const g = ctx.createLinearGradient(z.x, z.y, z.x + z.w, z.y + z.h);
-    g.addColorStop(0, "rgba(140,230,255,0.24)");
-    g.addColorStop(1, "rgba(60,160,220,0.24)");
+    g.addColorStop(0, "rgba(140,230,255,0.22)");
+    g.addColorStop(1, "rgba(60,160,220,0.22)");
     ctx.fillStyle = g;
     roundRect(z.x, z.y, z.w, z.h, 12, true);
 
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    ctx.fillStyle = "rgba(255,255,255,0.14)";
     roundRect(z.x + 6, z.y + 6, z.w - 12, Math.max(6, z.h * 0.35), 10, true);
 
-    ctx.strokeStyle = "rgba(255,255,255,0.28)";
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
     ctx.lineWidth = 2;
     ctx.strokeRect(z.x, z.y, z.w, z.h);
   }
@@ -574,14 +620,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     skate.slipping = true;
     skate.slipT = 0;
-    skate.slipCd = 0.30;
+    skate.slipCd = 0.35;
 
-    // Slip direction follows the zone movement (feels like ice pushes you)
+    // Slower slip than before
     const dir = zone.vx >= 0 ? 1 : -1;
-    skate.lastHitVx = dir * rand(980, 1200);
+    skate.lastHitVx = dir * rand(620, 820);
 
     skate.player.vx = skate.lastHitVx;
-    skate.player.vy = rand(-220, 220);
+    skate.player.vy = rand(-170, 170);
 
     showToast("Slip!");
   }
@@ -594,15 +640,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     updateIceZones(dt);
     skate.slipCd = Math.max(0, skate.slipCd - dt);
+    skate.spawnGrace = Math.max(0, skate.spawnGrace - dt);
 
-    // Detect "entering" an ice zone (not continuous spam)
-    let onIce = false;
-    let hitZone = null;
-    for (const z of skate.ice) {
-      if (circleRectHit(p.x, p.y, skate.pr, z)) { onIce = true; hitZone = z; break; }
+    // Only allow slip triggers after spawn grace ends
+    if (skate.spawnGrace <= 0) {
+      let onIce = false;
+      let hitZone = null;
+      for (const z of skate.ice) {
+        if (circleRectHit(p.x, p.y, skate.pr, z)) { onIce = true; hitZone = z; break; }
+      }
+      if (onIce && !skate.prevOnIce && hitZone) triggerSlip(hitZone);
+      skate.prevOnIce = onIce;
+    } else {
+      skate.prevOnIce = false;
     }
-    if (onIce && !skate.prevOnIce && hitZone) triggerSlip(hitZone);
-    skate.prevOnIce = onIce;
 
     if (!skate.slipping) {
       let ax = 0, ay = 0;
@@ -615,14 +666,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ax /= n; ay /= n;
 
       const accel = 2600;
-      const maxSpeed = 920;
+      const maxSpeed = 900;
 
       p.vx += ax * accel * dt;
       p.vy += ay * accel * dt;
 
       if (input.down) steerToward(p, input.x, input.y, 1900, dt);
 
-      // Slippery damping
       const damp = dampFactor(0.987, dt);
       p.vx *= damp;
       p.vy *= damp;
@@ -633,12 +683,10 @@ document.addEventListener("DOMContentLoaded", () => {
         p.vy = (p.vy / sp) * maxSpeed;
       }
 
-      // IMPORTANT: ice zones are not used for collision, only bounds
       integrate(p, skate.pr, dt, { x: 0, y: 0, w, h, pad: skate.pr });
     } else {
       skate.slipT += dt;
 
-      // Keep pushing you in the slip direction a bit
       p.vx += (skate.lastHitVx - p.vx) * 0.08;
       p.vx *= dampFactor(0.997, dt);
       p.vy *= dampFactor(0.997, dt);
@@ -652,6 +700,7 @@ document.addEventListener("DOMContentLoaded", () => {
         p.vy = 0;
         skate.slipping = false;
         skate.prevOnIce = false;
+        skate.spawnGrace = 0.25; // tiny grace after reset
         showToast("Back to middle!");
       }
     }
@@ -669,7 +718,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (skate.collected >= skate.goal) {
       running = false;
-      showNextOverlay("Cleared!", "Final: Swimming tag (AI now re-paths and cannot get stuck easy).", "Next: Swimming", () => {
+      showNextOverlay("Cleared!", "Final: Swimming tag. Win on 1 touch now.", "Next: Swimming", () => {
         setScene(2);
         overlay.hidden = true;
         running = true;
@@ -708,10 +757,10 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.font = "14px system-ui";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(`Collected: ${Math.max(0, skate.collected)}/${skate.goal}   Touch moving ice = slip + reset`, 16, 22);
+    ctx.fillText(`Collected: ${Math.max(0, skate.collected)}/${skate.goal}   Touch moving ice = slip and reset`, 16, 22);
   }
 
-  /* ---------------- Swimming: harder + unstuck AI ---------------- */
+  /* ---------------- Swimming: win on 1 touch ---------------- */
   function makeBuoys(pool) {
     const buoys = [];
     const count = 12;
@@ -810,7 +859,6 @@ document.addEventListener("DOMContentLoaded", () => {
       caught: false,
       kissT: 0,
       proposalShown: false,
-      tagHold: 0,
 
       girlTarget: null,
       targetTimer: 0
@@ -836,7 +884,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // Guy slightly weaker
+    // Guy control
     const guyAccel = 1350;
     const guyMax = 470;
 
@@ -851,20 +899,17 @@ document.addEventListener("DOMContentLoaded", () => {
     let sp = Math.hypot(guy.vx, guy.vy);
     if (sp > guyMax) { guy.vx = (guy.vx / sp) * guyMax; guy.vy = (guy.vy / sp) * guyMax; }
 
-    const dToGuy = dist(girl.x, girl.y, guy.x, guy.y);
-
     if (!swim.caught) {
-      // Re-target often, and re-target immediately if too close
+      // Girl re-path
       swim.targetTimer -= dt;
+      const dToGuy = dist(girl.x, girl.y, guy.x, guy.y);
       if (swim.targetTimer <= 0 || !swim.girlTarget || dToGuy < 170) pickGirlTarget(swim);
 
-      // Move toward chosen escape point
       const girlAccel = 2000;
       const girlMax = 760;
-
       steerToward(girl, swim.girlTarget.x, swim.girlTarget.y, girlAccel, dt);
 
-      // Strong avoidance of buoys
+      // Strong avoidance
       for (const b of swim.buoys) {
         const bx = girl.x - b.x;
         const by = girl.y - b.y;
@@ -877,7 +922,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Damping and cap
       const girlD = dampFactor(0.945, dt);
       girl.vx *= girlD;
       girl.vy *= girlD;
@@ -885,34 +929,20 @@ document.addEventListener("DOMContentLoaded", () => {
       sp = Math.hypot(girl.vx, girl.vy);
       if (sp > girlMax) { girl.vx = (girl.vx / sp) * girlMax; girl.vy = (girl.vy / sp) * girlMax; }
 
-      // Collide with buoys
       integrateWithCircleObstacles(guy, swim.gr, dt, { x: p.x, y: p.y, w: p.w, h: p.h, pad: swim.gr }, swim.buoys);
       integrateWithCircleObstacles(girl, swim.rr, dt, { x: p.x, y: p.y, w: p.w, h: p.h, pad: swim.rr }, swim.buoys);
 
-      // If guy hits buoy, slow down a bit (harder)
-      for (const b of swim.buoys) {
-        if (dist(guy.x, guy.y, b.x, b.y) < (swim.gr + b.r + 2)) {
-          guy.vx *= 0.88;
-          guy.vy *= 0.88;
-          break;
-        }
-      }
-
-      // Stuck detection and fix for girl
+      // stuck fix
       const moved = dist(girl.x, girl.y, girl.lastX, girl.lastY);
       girl.lastX = girl.x; girl.lastY = girl.y;
-
-      if (moved < 0.22) girl.stuckT += dt;
-      else girl.stuckT = Math.max(0, girl.stuckT - dt * 0.8);
+      if (moved < 0.22) girl.stuckT += dt; else girl.stuckT = Math.max(0, girl.stuckT - dt * 0.8);
 
       if (girl.stuckT > 0.55) {
-        // Re-path hard
         pickGirlTarget(swim);
         girl.vx += rand(-220, 220);
         girl.vy += rand(-220, 220);
       }
       if (girl.stuckT > 1.05) {
-        // Emergency escape so it never becomes easy
         pickGirlTarget(swim);
         girl.x = swim.girlTarget.x;
         girl.y = swim.girlTarget.y;
@@ -921,12 +951,9 @@ document.addEventListener("DOMContentLoaded", () => {
         girl.stuckT = 0;
       }
 
-      // Harder tag: must stay close briefly
+      // WIN ON 1 TOUCH
       const catchRadius = 42;
-      if (dist(guy.x, guy.y, girl.x, girl.y) < catchRadius) swim.tagHold += dt;
-      else swim.tagHold = Math.max(0, swim.tagHold - dt * 0.9);
-
-      if (swim.tagHold > 0.35) {
+      if (dist(guy.x, guy.y, girl.x, girl.y) < catchRadius) {
         swim.caught = true;
         swim.kissT = 0;
         showToast("Tagged!");
@@ -936,7 +963,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       guy.vx *= dampFactor(0.85, dt);
       guy.vy *= dampFactor(0.85, dt);
-
       integrateWithCircleObstacles(guy, swim.gr, dt, { x: p.x, y: p.y, w: p.w, h: p.h, pad: swim.gr }, swim.buoys);
 
       girl.x += (guy.x - girl.x) * 0.10;
@@ -945,7 +971,7 @@ document.addEventListener("DOMContentLoaded", () => {
       girl.x = clamp(girl.x, p.x + swim.rr, p.x + p.w - swim.rr);
       girl.y = clamp(girl.y, p.y + swim.rr, p.y + p.h - swim.rr);
 
-      if (swim.kissT > 1.35 && !swim.proposalShown) {
+      if (swim.kissT > 1.20 && !swim.proposalShown) {
         swim.proposalShown = true;
         running = false;
         showProposal();
@@ -997,7 +1023,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.font = "14px system-ui";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(swim.caught ? "Aww..." : `Tag her: stay close briefly. Hold: ${(swim.tagHold || 0).toFixed(2)}s`, 16, 22);
+    ctx.fillText(swim.caught ? "Aww..." : "Tag her (1 touch). Avoid buoys.", 16, 22);
   }
 
   /* ---------------- Proposal ---------------- */
@@ -1092,13 +1118,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (miniRow1) miniRow1.textContent = "Goal: Hit 8 notes.";
       if (miniRow2) miniRow2.textContent = "Tap anywhere (or Space).";
     } else if (scene === 1) {
-      if (subtitleEl) subtitleEl.textContent = "Mini-game 2: Ice skating. Ice is non-physical but triggers slip + reset.";
+      if (subtitleEl) subtitleEl.textContent = "Mini-game 2: Ice skating. Safer spawn and slower ice.";
       if (miniRow1) miniRow1.textContent = "Goal: Collect 6 hearts.";
       if (miniRow2) miniRow2.textContent = "Touch moving ice = slip and reset.";
     } else {
-      if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. AI re-paths so it cannot get stuck easy.";
-      if (miniRow1) miniRow1.textContent = "Goal: Tag her (stay close briefly).";
-      if (miniRow2) miniRow2.textContent = "Buoys are faster and more.";
+      if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. Win on 1 touch now.";
+      if (miniRow1) miniRow1.textContent = "Goal: Tag her (1 touch).";
+      if (miniRow2) miniRow2.textContent = "Avoid buoys.";
     }
 
     resetSceneState();
@@ -1115,11 +1141,11 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.textContent = "Start karaoke";
     } else if (scene === 1) {
       overlayTitle.textContent = "Ice skating";
-      overlayText.textContent = "Collect 6 hearts. The moving ice is not a wall, but touching it makes you slip and reset to middle.";
+      overlayText.textContent = "Collect 6 hearts. Ice is not a wall, touching it makes you slip and reset to middle.";
       startBtn.textContent = "Start skating";
     } else {
       overlayTitle.textContent = "Swimming tag";
-      overlayText.textContent = "Harder: stay close briefly to tag her. She re-paths and escapes if stuck.";
+      overlayText.textContent = "Win on 1 touch. Avoid moving buoys.";
       startBtn.textContent = "Start swimming";
     }
 
