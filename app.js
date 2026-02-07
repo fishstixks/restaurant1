@@ -433,8 +433,8 @@ document.addEventListener("DOMContentLoaded", () => {
     ax /= n; ay /= n;
 
     // Slower than before
-    const accel = 650;
-    const maxSpeed = 220;
+    const accel = 850;
+    const maxSpeed = 320;
 
     p.vx += ax * accel * dt;
     p.vy += ay * accel * dt;
@@ -876,4 +876,5 @@ document.addEventListener("DOMContentLoaded", () => {
   running = false;
 
   requestAnimationFrame(loop);
+
 });
