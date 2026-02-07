@@ -26,14 +26,12 @@ const noHint = document.getElementById("noHint");
 const flowersModal = document.getElementById("flowersModal");
 const flowersRestart = document.getElementById("flowersRestart");
 
-// Crash message on screen
-window.addEventListener("error", (e) => {
-  overlay.hidden = false;
-  overlayTitle.textContent = "Error";
-  overlayText.textContent = `JS error: ${e.message}`;
-  startBtn.textContent = "Reload";
-  startAction = () => location.reload();
-});
+// Stop any old service worker from caching stale files on localhost
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then((regs) => regs.forEach((r) => r.unregister()))
+    .catch(() => {});
+}
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function rand(a, b) { return Math.random() * (b - a) + a; }
@@ -290,7 +288,14 @@ function resetAll() {
   flowersModal.classList.remove("show");
   confetti = [];
   confettiTimer = 0;
+
+  // reset scene states so nothing is undefined
+  karaoke = null;
+  skate = null;
+  swim = null;
+
   setScene(0);
+  resetSceneState(); // prepare initial scene so drawing never crashes
   overlay.hidden = false;
   running = false;
 }
@@ -802,9 +807,19 @@ function loop(now) {
 
   ctx.clearRect(0, 0, W(), H());
 
-  if (scene === 0) { if (running) updateKaraoke(dt); drawKaraoke(); }
-  if (scene === 1) { if (running) updateSkate(dt); drawSkate(); }
-  if (scene === 2) { if (running) updateSwim(dt); drawSwim(); }
+  // Safety: if a scene state somehow isn't ready, just skip drawing this frame.
+  if (scene === 0) {
+    if (running && karaoke) updateKaraoke(dt);
+    if (karaoke) drawKaraoke();
+  }
+  if (scene === 1) {
+    if (running && skate) updateSkate(dt);
+    if (skate) drawSkate();
+  }
+  if (scene === 2) {
+    if (running && swim) updateSwim(dt);
+    if (swim) drawSwim();
+  }
 
   updateConfetti(dt);
   drawConfetti();
@@ -822,7 +837,13 @@ function boot() {
   scoreEl.textContent = String(score);
   valModal.classList.remove("show");
   flowersModal.classList.remove("show");
+
+  karaoke = null;
+  skate = null;
+  swim = null;
+
   setScene(0);
+  resetSceneState(); // prepare initial scene so drawing never crashes
   overlay.hidden = false;
   running = false;
   requestAnimationFrame(loop);
