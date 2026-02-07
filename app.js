@@ -31,11 +31,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!stage || !canvas || !ctx || !overlay || !startBtn) return;
 
-  // Never show an error UI
   window.addEventListener("error", (e) => { try { e.preventDefault(); } catch {} }, true);
   window.addEventListener("unhandledrejection", (e) => { try { e.preventDefault(); } catch {} }, true);
 
-  /* ---------------- Helpers ---------------- */
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const rand = (a, b) => Math.random() * (b - a) + a;
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
@@ -77,7 +75,6 @@ document.addEventListener("DOMContentLoaded", () => {
     obj.vy += (dy / d) * accel * dt;
   }
 
-  /* ---------------- Input ---------------- */
   const keys = {};
   const input = { down: false, tap: false, x: 0, y: 0 };
 
@@ -110,7 +107,6 @@ document.addEventListener("DOMContentLoaded", () => {
   canvas.addEventListener("pointermove", (e) => onMove(e.clientX, e.clientY));
   canvas.addEventListener("pointerup", () => onUp());
 
-  /* ---------------- Toast ---------------- */
   let toastTimer = 0;
   function showToast(text) {
     if (!toast) return;
@@ -126,10 +122,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* ---------------- Confetti ---------------- */
   let confetti = [];
   let confettiTimer = 0;
-
   function spawnConfetti() {
     const w = W(), h = H();
     confetti = [];
@@ -175,7 +169,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  /* ---------------- Audio ---------------- */
   let audioCtx = null;
 
   function ensureAudio() {
@@ -183,7 +176,6 @@ document.addEventListener("DOMContentLoaded", () => {
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
     catch { audioCtx = null; }
   }
-
   function resumeAudio() {
     if (!audioCtx) return;
     if (audioCtx.state === "suspended") {
@@ -191,7 +183,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Small sound effect for karaoke taps
   function sfxBeep(freq, duration = 0.08, gain = 0.05, type = "triangle") {
     if (!audioCtx) return;
     const t = audioCtx.currentTime + 0.005;
@@ -211,7 +202,6 @@ document.addEventListener("DOMContentLoaded", () => {
     osc.stop(t + duration + 0.02);
   }
 
-  // Cute ending melody
   function noteToFreq(note) {
     if (note === "REST") return 0;
     const A4 = 440;
@@ -227,9 +217,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let t = audioCtx.currentTime + 0.02;
     for (const s of seq) {
       const dur = s.d * beat;
-      if (s.n !== "REST") {
-        sfxBeep(noteToFreq(s.n), dur, gain, "triangle");
-      }
+      if (s.n !== "REST") sfxBeep(noteToFreq(s.n), dur, gain, "triangle");
       t += dur;
     }
   }
@@ -240,10 +228,8 @@ document.addEventListener("DOMContentLoaded", () => {
     {n:"G5",d:1.0},
   ];
 
-  // Start button is a user gesture, so unlock audio there too
   startBtn.addEventListener("click", () => { ensureAudio(); resumeAudio(); });
 
-  /* ---------------- Game state ---------------- */
   let scene = 0;
   let score = 0;
   let running = false;
@@ -253,7 +239,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   startBtn.addEventListener("click", () => overlayAction());
 
-  /* ---------------- Karaoke ---------------- */
   function initKaraoke() {
     karaoke = {
       x: W() * 0.5,
@@ -272,17 +257,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function spawnKaraokeNote() {
     if (karaoke.spawned >= karaoke.total) return;
-    karaoke.notes.push({
-      y: -30,
-      r: 16,
-      speed: Math.max(260, H() * 0.65),
-      alive: true
-    });
+    karaoke.notes.push({ y: -30, r: 16, speed: Math.max(260, H() * 0.65), alive: true });
     karaoke.spawned += 1;
   }
 
   function karaokeTryHit() {
-    // Sound per press
     ensureAudio();
     resumeAudio();
 
@@ -301,7 +280,6 @@ document.addEventListener("DOMContentLoaded", () => {
       score += 10;
       if (scoreEl) scoreEl.textContent = String(score);
 
-      // Higher pitch for better timing
       const freq = bestD <= 13 ? 880 : 740;
       sfxBeep(freq, 0.08, 0.055);
       showToast(bestD <= 13 ? "Perfect!" : "Good!");
@@ -404,7 +382,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(`Hit: ${karaoke.hit}/8   Miss: ${karaoke.miss}`, 16, 22);
   }
 
-  /* ---------------- Ice skating (slower) ---------------- */
   function initSkate() {
     const w = W(), h = H();
     skate = {
@@ -414,9 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
       tokens: [],
       done: false
     };
-    for (let i = 0; i < skate.goal; i++) {
-      skate.tokens.push({ x: rand(70, w - 70), y: rand(70, h - 70), alive: true });
-    }
+    for (let i = 0; i < skate.goal; i++) skate.tokens.push({ x: rand(70, w - 70), y: rand(70, h - 70), alive: true });
   }
 
   function updateSkate(dt) {
@@ -432,16 +407,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // Slower than before
-    const accel = 250;
-    const maxSpeed = 1020;
+    const accel = 650;
+    const maxSpeed = 220;
 
     p.vx += ax * accel * dt;
     p.vy += ay * accel * dt;
 
     if (input.down) steerToward(p, input.x, input.y, 360, dt);
 
-    // More damping so it does not rocket around
     const damp = dampFactor(0.80, dt);
     p.vx *= damp;
     p.vy *= damp;
@@ -512,13 +485,12 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(`Collected: ${skate.collected}/${skate.goal}`, 16, 22);
   }
 
-  /* ---------------- Swimming (harder + wall-smart) ---------------- */
   function initSwim() {
     const w = W(), h = H();
     swim = {
       pool: { x: w * 0.08, y: h * 0.10, w: w * 0.84, h: h * 0.82 },
       guy:  { x: w * 0.30, y: h * 0.55, vx: 0, vy: 0 },
-      girl: { x: w * 0.68, y: h * 0.45, vx: 0, vy: 0, stuckT: 0, lastX: w*0.68, lastY: h*0.45 },
+      girl: { x: w * 0.68, y: h * 0.45, vx: 0, vy: 0, stuckT: 0, lastX: w * 0.68, lastY: h * 0.45 },
       caught: false,
       kissT: 0,
       proposalShown: false
@@ -540,107 +512,116 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    const guyAccel = 980;
-    const guyMax = 330;
+    // SUPER SPEED: way faster swim
+    const guyAccel = 2400;
+    const guyMax = 820;
 
     guy.vx += ax * guyAccel * dt;
     guy.vy += ay * guyAccel * dt;
 
-    if (input.down) steerToward(guy, input.x, input.y, 720, dt);
+    // SUPER SPEED: mobile drag steering is much stronger
+    if (input.down) steerToward(guy, input.x, input.y, 2400, dt);
 
-    const guyD = dampFactor(0.88, dt);
+    // Less damping so speed actually stays high
+    const guyD = dampFactor(0.94, dt);
     guy.vx *= guyD;
     guy.vy *= guyD;
 
     let sp = Math.hypot(guy.vx, guy.vy);
-    if (sp > guyMax) { guy.vx = (guy.vx / sp) * guyMax; guy.vy = (guy.vy / sp) * guyMax; }
+    if (sp > guyMax) {
+      guy.vx = (guy.vx / sp) * guyMax;
+      guy.vy = (guy.vy / sp) * guyMax;
+    }
 
     const dx = girl.x - guy.x;
     const dy = girl.y - guy.y;
     const d = Math.hypot(dx, dy) || 1;
 
     if (!swim.caught) {
-      // Harder: smaller catch radius and girl speed ramps up when close
+      // Make it harder while still fast
       const catchRadius = 52;
 
-      const fleeBoost = clamp((320 - d) / 320, 0, 1);
-      const girlAccel = 760 * (0.45 + 0.85 * fleeBoost);
-      const girlMax = 340 * (0.75 + 0.55 * fleeBoost);
+      const fleeBoost = clamp((360 - d) / 360, 0, 1);
 
-      // Flee away from guy
+      // Girl is also much faster so she does not get caught instantly
+      const girlAccel = 2000 * (0.50 + 0.90 * fleeBoost);
+      const girlMax = 900 * (0.60 + 0.55 * fleeBoost);
+
       girl.vx += (dx / d) * girlAccel * dt;
       girl.vy += (dy / d) * girlAccel * dt;
 
-      // Small wiggle so she does not move in straight lines
-      girl.vx += Math.sin(performance.now() * 0.004) * 18 * dt;
-      girl.vy += Math.cos(performance.now() * 0.004) * 18 * dt;
+      // Wiggle, stronger
+      girl.vx += Math.sin(performance.now() * 0.005) * 35 * dt;
+      girl.vy += Math.cos(performance.now() * 0.005) * 35 * dt;
 
-      // Wall avoidance: push her toward center if she gets near an edge
-      const m = 50;
+      // Wall avoidance stronger
+      const m = 70;
       const cx = p.x + p.w * 0.5;
       const cy = p.y + p.h * 0.5;
 
-      if (girl.x < p.x + m) girl.vx += (cx - girl.x) * 6 * dt;
-      if (girl.x > p.x + p.w - m) girl.vx += (cx - girl.x) * 6 * dt;
-      if (girl.y < p.y + m) girl.vy += (cy - girl.y) * 6 * dt;
-      if (girl.y > p.y + p.h - m) girl.vy += (cy - girl.y) * 6 * dt;
+      if (girl.x < p.x + m) girl.vx += (cx - girl.x) * 10 * dt;
+      if (girl.x > p.x + p.w - m) girl.vx += (cx - girl.x) * 10 * dt;
+      if (girl.y < p.y + m) girl.vy += (cy - girl.y) * 10 * dt;
+      if (girl.y > p.y + p.h - m) girl.vy += (cy - girl.y) * 10 * dt;
 
-      // Damping
-      const girlD = dampFactor(0.90, dt);
+      // Less damping so she stays speedy too
+      const girlD = dampFactor(0.95, dt);
       girl.vx *= girlD;
       girl.vy *= girlD;
 
       sp = Math.hypot(girl.vx, girl.vy);
-      if (sp > girlMax) { girl.vx = (girl.vx / sp) * girlMax; girl.vy = (girl.vy / sp) * girlMax; }
-
-      // Move both
-      guy.x += guy.vx * dt; guy.y += guy.vy * dt;
-      girl.x += girl.vx * dt; girl.y += girl.vy * dt;
-
-      // Clamp + bounce so she does not stick to walls
-      const pad = 22;
-
-      const oldGX = girl.x, oldGY = girl.y;
-
-      if (girl.x <= p.x + pad) { girl.x = p.x + pad; girl.vx = Math.abs(girl.vx) * 0.85; }
-      if (girl.x >= p.x + p.w - pad) { girl.x = p.x + p.w - pad; girl.vx = -Math.abs(girl.vx) * 0.85; }
-      if (girl.y <= p.y + pad) { girl.y = p.y + pad; girl.vy = Math.abs(girl.vy) * 0.85; }
-      if (girl.y >= p.y + p.h - pad) { girl.y = p.y + p.h - pad; girl.vy = -Math.abs(girl.vy) * 0.85; }
-
-      // Stuck detector: if she barely moved for a while, nudge her inward
-      const moved = dist(girl.x, girl.y, girl.lastX, girl.lastY);
-      girl.lastX = girl.x; girl.lastY = girl.y;
-      if (moved < 0.3) girl.stuckT += dt; else girl.stuckT = 0;
-      if (girl.stuckT > 0.45) {
-        girl.stuckT = 0;
-        // Nudge toward center and sideways
-        girl.vx += (cx - girl.x) * 9 * dt + rand(-80, 80) * dt;
-        girl.vy += (cy - girl.y) * 9 * dt + rand(-80, 80) * dt;
+      if (sp > girlMax) {
+        girl.vx = (girl.vx / sp) * girlMax;
+        girl.vy = (girl.vy / sp) * girlMax;
       }
 
-      // Clamp guy (no bounce needed)
+      guy.x += guy.vx * dt;
+      guy.y += guy.vy * dt;
+
+      girl.x += girl.vx * dt;
+      girl.y += girl.vy * dt;
+
+      const pad = 22;
+
+      // Girl bounce off walls
+      if (girl.x <= p.x + pad) { girl.x = p.x + pad; girl.vx = Math.abs(girl.vx) * 0.90; }
+      if (girl.x >= p.x + p.w - pad) { girl.x = p.x + p.w - pad; girl.vx = -Math.abs(girl.vx) * 0.90; }
+      if (girl.y <= p.y + pad) { girl.y = p.y + pad; girl.vy = Math.abs(girl.vy) * 0.90; }
+      if (girl.y >= p.y + p.h - pad) { girl.y = p.y + p.h - pad; girl.vy = -Math.abs(girl.vy) * 0.90; }
+
+      // Stuck detector, faster reaction
+      const moved = dist(girl.x, girl.y, girl.lastX, girl.lastY);
+      girl.lastX = girl.x; girl.lastY = girl.y;
+      if (moved < 0.35) girl.stuckT += dt; else girl.stuckT = 0;
+
+      if (girl.stuckT > 0.30) {
+        girl.stuckT = 0;
+        girl.vx += (cx - girl.x) * 14 * dt + rand(-160, 160) * dt;
+        girl.vy += (cy - girl.y) * 14 * dt + rand(-160, 160) * dt;
+      }
+
+      // Clamp guy
       guy.x = clamp(guy.x, p.x + pad, p.x + p.w - pad);
       guy.y = clamp(guy.y, p.y + pad, p.y + p.h - pad);
 
-      // Catch check after movement
       if (dist(guy.x, guy.y, girl.x, girl.y) < catchRadius) {
         swim.caught = true;
         swim.kissT = 0;
         showToast("Caught!");
       }
     } else {
-      // Kiss + proposal timing
       swim.kissT += dt;
 
-      guy.vx *= dampFactor(0.78, dt);
-      guy.vy *= dampFactor(0.78, dt);
-      girl.vx *= dampFactor(0.78, dt);
-      girl.vy *= dampFactor(0.78, dt);
+      guy.vx *= dampFactor(0.82, dt);
+      guy.vy *= dampFactor(0.82, dt);
+      girl.vx *= dampFactor(0.82, dt);
+      girl.vy *= dampFactor(0.82, dt);
 
-      guy.x += guy.vx * dt; guy.y += guy.vy * dt;
+      guy.x += guy.vx * dt;
+      guy.y += guy.vy * dt;
 
-      girl.x += (guy.x - girl.x) * 0.08;
-      girl.y += (guy.y - girl.y) * 0.08;
+      girl.x += (guy.x - girl.x) * 0.10;
+      girl.y += (guy.y - girl.y) * 0.10;
 
       const pad = 22;
       guy.x = clamp(guy.x, p.x + pad, p.x + p.w - pad);
@@ -691,7 +672,6 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(swim.caught ? "Aww..." : "Tag: Catch her!", 16, 22);
   }
 
-  /* ---------------- Proposal ---------------- */
   let noAttempts = 0;
 
   function showProposal() {
@@ -766,7 +746,6 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  /* ---------------- Scene UI ---------------- */
   function resetSceneState() {
     if (scene === 0) initKaraoke();
     if (scene === 1) initSkate();
@@ -787,7 +766,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (miniRow1) miniRow1.textContent = "Goal: Collect 6 snow hearts.";
       if (miniRow2) miniRow2.textContent = "Hold and drag to steer on mobile.";
     } else {
-      if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. Catch her, kiss, then the question.";
+      if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. Faster chase.";
       if (miniRow1) miniRow1.textContent = "Goal: Catch her once.";
       if (miniRow2) miniRow2.textContent = "Hold and drag to chase on mobile.";
     }
@@ -810,7 +789,7 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.textContent = "Start skating";
     } else {
       overlayTitle.textContent = "Swimming tag";
-      overlayText.textContent = "Chase her, catch her, cute ending unlocked.";
+      overlayText.textContent = "Now it is FAST. Catch her, cute ending unlocked.";
       startBtn.textContent = "Start swimming";
     }
 
@@ -844,9 +823,7 @@ document.addEventListener("DOMContentLoaded", () => {
     running = false;
   }
 
-  /* ---------------- Main loop ---------------- */
   let last = performance.now();
-
   function loop(now) {
     const dt = clamp((now - last) / 1000, 0, 0.05);
     last = now;
@@ -865,7 +842,6 @@ document.addEventListener("DOMContentLoaded", () => {
     requestAnimationFrame(loop);
   }
 
-  /* ---------------- Boot ---------------- */
   resizeCanvas();
   if (scoreEl) scoreEl.textContent = String(score);
   if (valModal) valModal.classList.remove("show");
@@ -876,6 +852,4 @@ document.addEventListener("DOMContentLoaded", () => {
   running = false;
 
   requestAnimationFrame(loop);
-
 });
-
