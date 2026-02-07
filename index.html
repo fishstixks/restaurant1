@@ -3,8 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Valentine Quest</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>Arcade Quest</title>
+
+  <!-- Critical fallback styling (so it won't "break" even if style.css fails) -->
+  <style>
+    html,body{height:100%;margin:0}
+    #app{height:100%;display:flex;flex-direction:column}
+    #game{display:block;width:100%;height:100%}
+    .modal{display:none}
+  </style>
+
+  <!-- Main styling (make sure style.css is in the SAME folder as this index.html) -->
+  <link rel="stylesheet" href="./style.css?v=16" />
 </head>
 <body>
   <div id="app">
@@ -75,6 +85,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=15"></script>
+  <!-- JS (make sure app.js is in the SAME folder as this index.html) -->
+  <script src="./app.js?v=16"></script>
 </body>
 </html>
