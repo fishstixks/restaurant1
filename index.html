@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Valentine Arcade Quest</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-hearts" aria-hidden="true"></div>
+
+  <main class="wrap">
+    <section class="card">
+      <header class="top">
+        <div class="badge">🎮💗</div>
+
+        <div class="progress">
+          <div class="dot on" id="dot0" title="Karaoke"></div>
+          <div class="dot" id="dot1" title="Ice skating"></div>
+          <div class="dot" id="dot2" title="Swimming tag"></div>
+        </div>
+
+        <div class="hud">
+          <div class="hud-item"><span id="sceneName">Karaoke</span></div>
+          <div class="hud-item">Score: <span id="score">0</span></div>
+        </div>
+      </header>
+
+      <h1>Valentine Arcade Quest</h1>
+      <p class="sub" id="subtitle">Beat 3 mini-games. Touch works. Keyboard works too.</p>
+
+      <div class="controls">
+        <div class="pill">Tap anywhere to play</div>
+        <div class="pill">WASD / Arrow keys supported</div>
+        <div class="pill">Restart: R</div>
+      </div>
+
+      <div class="stage" id="stage">
+        <canvas id="game"></canvas>
+
+        <div class="overlay" id="overlay">
+          <div class="overlayCard">
+            <div class="overlayTitle" id="overlayTitle">Karaoke</div>
+            <div class="overlayText" id="overlayText">Tap when the falling note hits the line.</div>
+            <button class="btn yes" id="startBtn">Start</button>
+          </div>
+        </div>
+
+        <div class="toast" id="toast" hidden>Perfect!</div>
+      </div>
+
+      <div class="miniHud">
+        <div class="miniRow" id="miniRow1"></div>
+        <div class="miniRow" id="miniRow2"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Valentine popup -->
+  <div class="modal" id="valModal" aria-hidden="true">
+    <div class="burnCard">
+      <div class="burnGlow" aria-hidden="true"></div>
+      <div class="burnInner">
+        <div class="burnTitle">Will you be my Valentine?</div>
+        <div class="burnSub" id="burnSub">Choose wisely.</div>
+
+        <div class="burnBtns" id="burnBtns">
+          <button class="btn yes bigYes" id="modalYes">Yes 💖</button>
+          <button class="btn no bigNo" id="modalNo">No 🙃</button>
+        </div>
+
+        <div class="tiny" id="noHint">If you press No, it gets annoying.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bouquet gift popup (shows after YES) -->
+  <div class="modal" id="giftModal" aria-hidden="true">
+    <div class="burnCard">
+      <div class="burnGlow" aria-hidden="true"></div>
+      <div class="burnInner">
+        <div class="burnTitle">Bouquet Gift!</div>
+        <div class="giftBouquet" aria-hidden="true">💐</div>
+        <div class="burnSub">A bouquet of flowers for you.</div>
+
+        <div class="burnBtns">
+          <button class="btn yes bigYes" id="giftRestart">Play again</button>
+        </div>
+
+        <div class="tiny">Press R anytime to restart.</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
