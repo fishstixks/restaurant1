@@ -1,91 +1,108 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>Arcade Quest</title>
-
-  <!-- Critical fallback styling (so it won't "break" even if style.css fails) -->
-  <style>
-    html,body{height:100%;margin:0}
-    #app{height:100%;display:flex;flex-direction:column}
-    #game{display:block;width:100%;height:100%}
-    .modal{display:none}
-  </style>
-
-  <!-- Main styling (make sure style.css is in the SAME folder as this index.html) -->
-  <link rel="stylesheet" href="./style.css?v=16" />
+  <link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
-  <div id="app">
-    <header class="hud">
-      <div class="hud-left">
-        <div class="dots">
-          <span id="dot0" class="dot on"></span>
-          <span id="dot1" class="dot"></span>
-          <span id="dot2" class="dot"></span>
+  <div class="bg-hearts" aria-hidden="true"></div>
+
+  <main class="wrap">
+    <section class="card">
+      <header class="top">
+        <div class="badge" aria-label="Corgi logo">
+          <svg class="corgi" viewBox="0 0 120 120" role="img" aria-label="corgi">
+            <defs>
+              <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#ffcf8a"/>
+                <stop offset="1" stop-color="#f6b35f"/>
+              </linearGradient>
+            </defs>
+            <circle cx="60" cy="62" r="38" fill="url(#fur)"/>
+            <circle cx="60" cy="68" r="26" fill="#fff3e6" opacity="0.95"/>
+            <path d="M28 48 L18 28 L38 34 Z" fill="url(#fur)"/>
+            <path d="M92 48 L102 28 L82 34 Z" fill="url(#fur)"/>
+            <circle cx="46" cy="62" r="5" fill="#3a2a2a"/>
+            <circle cx="74" cy="62" r="5" fill="#3a2a2a"/>
+            <circle cx="60" cy="74" r="6" fill="#3a2a2a"/>
+            <path d="M52 82 Q60 90 68 82" stroke="#3a2a2a" stroke-width="4" fill="none" stroke-linecap="round"/>
+          </svg>
         </div>
-        <div class="titles">
-          <div id="sceneName" class="sceneName">Karaoke</div>
-          <div id="subtitle" class="subtitle">Mini-game 1: Karaoke. Tap on beat.</div>
+
+        <div class="progress">
+          <div class="dot on" id="dot0" title="Karaoke"></div>
+          <div class="dot" id="dot1" title="Ice skating"></div>
+          <div class="dot" id="dot2" title="Swimming tag"></div>
         </div>
+
+        <div class="hud">
+          <div class="hud-item"><span id="sceneName">Karaoke</span></div>
+          <div class="hud-item">Score: <span id="score">0</span></div>
+        </div>
+      </header>
+
+      <h1>Arcade Quest</h1>
+      <p class="sub" id="subtitle">Beat 3 mini-games. Touch and keyboard both work.</p>
+
+      <div class="controls">
+        <div class="pill">Karaoke: tap anywhere on beat (or Space)</div>
+        <div class="pill">Move: WASD / Arrow keys, or hold and drag</div>
+        <div class="pill">Restart: R</div>
       </div>
 
-      <div class="hud-right">
-        <div class="scoreBox">
-          <div class="scoreLabel">Score</div>
-          <div id="score" class="scoreVal">0</div>
-        </div>
-      </div>
-    </header>
+      <div class="stage" id="stage">
+        <canvas id="game"></canvas>
 
-    <div class="miniRows">
-      <div id="miniRow1" class="miniRow">Goal: Hit 8 notes.</div>
-      <div id="miniRow2" class="miniRow">Tap anywhere (or Space).</div>
+        <div class="overlay" id="overlay">
+          <div class="overlayCard">
+            <div class="overlayTitle" id="overlayTitle">Karaoke</div>
+            <div class="overlayText" id="overlayText">Tap when the note hits the line.</div>
+            <button class="btn yes" id="startBtn">Start</button>
+          </div>
+        </div>
+
+        <div class="toast" id="toast" hidden>Perfect!</div>
+      </div>
+
+      <div class="miniHud">
+        <div class="miniRow" id="miniRow1"></div>
+        <div class="miniRow" id="miniRow2"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="valModal">
+    <div class="burnCard">
+      <div class="burnGlow" aria-hidden="true"></div>
+      <div class="burnInner">
+        <div class="burnTitle">Will you be my Valentine?</div>
+
+        <div class="burnBtns" id="burnBtns">
+          <button class="btn yes bigYes" id="modalYes">Yes 💖</button>
+          <button class="btn no bigNo" id="modalNo">No 🙃</button>
+        </div>
+
+        <div class="tiny" id="noHint">If you press No, it gets annoying.</div>
+      </div>
     </div>
-
-    <main id="stage" class="stage">
-      <canvas id="game"></canvas>
-
-      <div id="toast" class="toast" hidden>Toast</div>
-
-      <div id="overlay" class="overlay">
-        <div class="overlayCard">
-          <div id="overlayTitle" class="overlayTitle">Karaoke</div>
-          <div id="overlayText" class="overlayText">Tap when the note hits the line. Hit 8 notes to win.</div>
-          <button id="startBtn" class="primary">Start karaoke</button>
-          <div class="hint">Keyboard: WASD or Arrow keys. Tap works on mobile.</div>
-        </div>
-      </div>
-
-      <div id="valModal" class="modal">
-        <div class="burnCard">
-          <div class="burnTitle">Will you be my Valentine?</div>
-          <div id="burnSub" class="burnSub"></div>
-          <div id="burnBtns" class="burnBtns">
-            <button id="modalYes" class="yesBtn">Yes</button>
-            <button id="modalNo" class="noBtn">No</button>
-          </div>
-          <div id="noHint" class="noHint">If you press No, it gets annoying.</div>
-        </div>
-      </div>
-
-      <div id="flowersModal" class="modal">
-        <div class="flowersCard">
-          <div class="flowersTitle">YAYYYYY 💜🤍❤️</div>
-          <div class="flowersText">You said yes.</div>
-          <div class="flowersBox">
-            <div class="flowers">💐💐💐💐💐</div>
-            <div class="flowers">🌷🌸🌹🌼🪻</div>
-            <div class="flowers">🤍💜❤️🤍💜</div>
-          </div>
-          <button id="flowersRestart" class="secondary">Play again</button>
-        </div>
-      </div>
-    </main>
   </div>
 
-  <!-- JS (make sure app.js is in the SAME folder as this index.html) -->
-  <script src="./app.js?v=16"></script>
+  <div class="modal" id="flowersModal">
+    <div class="flowersCard">
+      <div class="flowersTitle">YAYY SEE YOU ON THE 14TH 💜🤍</div>
+      <div class="flowersBox">
+        <div class="bouquet">💐🌸🌷🌹🌼</div>
+        <div class="flowersText">I LOVE YOU FRONDOZO JULIE ANN SEMIRA NOSEJOB LOVEYDUBS</div>
+      </div>
+      <button class="btn yes" id="flowersRestart">Play again</button>
+    </div>
+  </div>
+
+  <script src="app.js?v=13"></script>
 </body>
 </html>
