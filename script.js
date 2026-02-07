@@ -26,7 +26,7 @@ const noHint = document.getElementById("noHint");
 const flowersModal = document.getElementById("flowersModal");
 const flowersRestart = document.getElementById("flowersRestart");
 
-// Crash message on screen
+// If anything crashes, show it
 window.addEventListener("error", (e) => {
   overlay.hidden = false;
   overlayTitle.textContent = "Error";
@@ -91,7 +91,6 @@ canvas.addEventListener("pointerdown", (e) => {
 canvas.addEventListener("pointermove", (e) => onMove(e.clientX, e.clientY));
 canvas.addEventListener("pointerup", () => onUp());
 
-// Touch fallback
 canvas.addEventListener("touchstart", (e) => {
   const t = e.touches[0];
   if (!t) return;
@@ -216,22 +215,50 @@ function drawConfetti() {
   ctx.restore();
 }
 
-// Scene and state
+// UI helpers
+function roundRect(x, y, w, h, r, fill, stroke) {
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+function dampFactor(base, dt) { return Math.pow(base, dt * 60); }
+function steerToward(obj, targetX, targetY, accel, dt) {
+  const dx = targetX - obj.x;
+  const dy = targetY - obj.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 1) return;
+  obj.vx += (dx / d) * accel * dt;
+  obj.vy += (dy / d) * accel * dt;
+}
+
+// State
 let scene = 0;
 let score = 0;
 let running = false;
 
-let karaoke, skate, swim;
+let karaoke = null, skate = null, swim = null;
 
-// Start button router
+// Start router
 let startAction = () => {};
 startBtn.onclick = () => startAction();
+
+function resetSceneState() {
+  if (scene === 0) initKaraoke();
+  if (scene === 1) initSkate();
+  if (scene === 2) initSwim();
+}
 
 function setScene(n) {
   scene = n;
   dotEls.forEach((d, i) => d.classList.toggle("on", i === scene));
-  const names = ["Karaoke", "Ice skating", "Swimming tag"];
-  sceneNameEl.textContent = names[scene];
+  sceneNameEl.textContent = ["Karaoke","Ice skating","Swimming tag"][scene];
 
   if (scene === 0) {
     subtitleEl.textContent = "Mini-game 1: Karaoke. Tap on beat.";
@@ -247,6 +274,8 @@ function setScene(n) {
     miniRow2.textContent = "Hold and drag to chase on mobile.";
   }
 
+  // IMPORTANT: init state now so draw never crashes
+  resetSceneState();
   showOverlayForScene();
 }
 
@@ -271,7 +300,7 @@ function showOverlayForScene() {
   startAction = () => {
     overlay.hidden = true;
     running = true;
-    resetSceneState();
+    resetSceneState(); // reset fresh when starting
   };
 }
 
@@ -295,38 +324,6 @@ function resetAll() {
   running = false;
 }
 
-function resetSceneState() {
-  if (scene === 0) initKaraoke();
-  if (scene === 1) initSkate();
-  if (scene === 2) initSwim();
-}
-
-// Helpers
-function roundRect(x, y, w, h, r, fill, stroke) {
-  const rr = Math.min(r, w/2, h/2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-  if (fill) ctx.fill();
-  if (stroke) ctx.stroke();
-}
-function dampFactor(base, dt) {
-  // base is per-frame feel at 60fps, converted to dt
-  return Math.pow(base, dt * 60);
-}
-function steerToward(obj, targetX, targetY, accel, dt) {
-  const dx = targetX - obj.x;
-  const dy = targetY - obj.y;
-  const d = Math.hypot(dx, dy);
-  if (d < 1) return;
-  obj.vx += (dx / d) * accel * dt;
-  obj.vy += (dy / d) * accel * dt;
-}
-
 // Karaoke
 function initKaraoke() {
   karaoke = {
@@ -341,20 +338,16 @@ function initKaraoke() {
     miss: 0,
     done: false
   };
-  showToast("Ready!");
   spawnKaraokeNote();
 }
 function spawnKaraokeNote() {
+  if (!karaoke) return;
   if (karaoke.spawned >= karaoke.total) return;
-  karaoke.notes.push({
-    y: -30,
-    r: 16,
-    speed: Math.max(260, H() * 0.65), // px/s
-    alive: true
-  });
+  karaoke.notes.push({ y: -30, r: 16, speed: Math.max(260, H() * 0.65), alive: true });
   karaoke.spawned += 1;
 }
 function karaokeTryHit() {
+  if (!karaoke) return;
   let best = null;
   let bestD = 9999;
   for (const n of karaoke.notes) {
@@ -374,6 +367,8 @@ function karaokeTryHit() {
   }
 }
 function updateKaraoke(dt) {
+  if (!karaoke || karaoke.done) return;
+
   karaoke.spawnTimer += dt;
   while (karaoke.spawnTimer >= karaoke.spawnEvery) {
     karaoke.spawnTimer -= karaoke.spawnEvery;
@@ -407,6 +402,7 @@ function updateKaraoke(dt) {
   }
 }
 function drawKaraoke() {
+  if (!karaoke) return;
   const w = W(), h = H();
   const x = karaoke.x;
 
@@ -416,14 +412,11 @@ function drawKaraoke() {
   const laneW = w * 0.28;
   const laneX = x - laneW/2;
 
-  ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.55)";
   roundRect(laneX, h*0.12, laneW, h*0.80, 18, true, false);
   ctx.strokeStyle = "rgba(255,47,116,0.25)";
   ctx.strokeRect(laneX, h*0.12, laneW, h*0.80);
-  ctx.restore();
 
-  ctx.save();
   ctx.strokeStyle = "rgba(255,47,116,0.65)";
   ctx.lineWidth = 6;
   ctx.beginPath();
@@ -431,8 +424,8 @@ function drawKaraoke() {
   ctx.lineTo(laneX + laneW, karaoke.lineY);
   ctx.stroke();
 
-  ctx.beginPath();
   ctx.fillStyle = "rgba(255,47,116,0.18)";
+  ctx.beginPath();
   ctx.arc(x, karaoke.lineY, 22, 0, Math.PI * 2);
   ctx.fill();
 
@@ -441,26 +434,23 @@ function drawKaraoke() {
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillText("Tap / Space", x, karaoke.lineY + 26);
-  ctx.restore();
 
   for (const n of karaoke.notes) {
     if (!n.alive) continue;
-    ctx.save();
-    ctx.beginPath();
     ctx.fillStyle = "rgba(255, 47, 116, 0.86)";
+    ctx.beginPath();
     ctx.arc(x, n.y, n.r, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "rgba(255,255,255,0.95)";
     ctx.font = "18px system-ui";
-    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("♪", x, n.y);
-    ctx.restore();
   }
 
   ctx.fillStyle = "rgba(107,22,55,0.9)";
   ctx.font = "14px system-ui";
   ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
   ctx.fillText(`Hit: ${karaoke.hit}/8   Miss: ${karaoke.miss}`, 16, 22);
 }
 
@@ -478,12 +468,11 @@ function initSkate() {
   for (let i = 0; i < skate.goal; i++) {
     skate.tokens.push({ x: rand(70,w-70), y: rand(70,h-70), alive: true });
   }
-  showToast("Skate!");
 }
 function updateSkate(dt) {
+  if (!skate || skate.done) return;
   const p = skate.player;
 
-  // keyboard accel
   let ax = 0, ay = 0;
   if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
   if (keys["KeyD"] || keys["ArrowRight"]) ax += 1;
@@ -493,28 +482,24 @@ function updateSkate(dt) {
   const n = Math.hypot(ax, ay) || 1;
   ax /= n; ay /= n;
 
-  const accel = 900;      // px/s^2
-  const maxSpeed = 320;   // px/s
+  const accel = 900;
+  const maxSpeed = 320;
 
   p.vx += ax * accel * dt;
   p.vy += ay * accel * dt;
 
-  // mobile steer
   if (input.down) steerToward(p, input.x, input.y, 520, dt);
 
-  // less slip (more damping)
   const damp = dampFactor(0.86, dt);
   p.vx *= damp;
   p.vy *= damp;
 
-  // cap speed
   const sp = Math.hypot(p.vx, p.vy);
   if (sp > maxSpeed) {
     p.vx = (p.vx / sp) * maxSpeed;
     p.vy = (p.vy / sp) * maxSpeed;
   }
 
-  // integrate
   p.x += p.vx * dt;
   p.y += p.vy * dt;
 
@@ -545,6 +530,7 @@ function updateSkate(dt) {
   }
 }
 function drawSkate() {
+  if (!skate) return;
   const w = W(), h = H();
   ctx.fillStyle = "rgba(210, 240, 255, 0.28)";
   ctx.fillRect(0,0,w,h);
@@ -568,10 +554,11 @@ function drawSkate() {
   ctx.fillStyle = "rgba(107,22,55,0.9)";
   ctx.font = "14px system-ui";
   ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
   ctx.fillText(`Collected: ${skate.collected}/${skate.goal}`, 16, 22);
 }
 
-// Swim (easier but not free)
+// Swim
 function initSwim() {
   const w = W(), h = H();
   swim = {
@@ -582,14 +569,13 @@ function initSwim() {
     kissT: 0,
     proposalShown: false
   };
-  showToast("Swim!");
 }
 function updateSwim(dt) {
+  if (!swim) return;
   const p = swim.pool;
   const guy = swim.guy;
   const girl = swim.girl;
 
-  // Guy input
   let ax = 0, ay = 0;
   if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
   if (keys["KeyD"] || keys["ArrowRight"]) ax += 1;
@@ -599,39 +585,33 @@ function updateSwim(dt) {
   const n = Math.hypot(ax, ay) || 1;
   ax /= n; ay /= n;
 
-  const guyAccel = 1050;   // px/s^2
-  const guyMax   = 360;    // px/s
+  const guyAccel = 1050;
+  const guyMax = 360;
 
   guy.vx += ax * guyAccel * dt;
   guy.vy += ay * guyAccel * dt;
 
-  // Mobile steer makes him definitely move
   if (input.down) steerToward(guy, input.x, input.y, 780, dt);
 
-  // water damping
   const guyDamp = dampFactor(0.88, dt);
   guy.vx *= guyDamp;
   guy.vy *= guyDamp;
 
-  // cap speed
   let sp = Math.hypot(guy.vx, guy.vy);
   if (sp > guyMax) { guy.vx = (guy.vx/sp) * guyMax; guy.vy = (guy.vy/sp) * guyMax; }
 
-  // Girl AI
   const dx = girl.x - guy.x;
   const dy = girl.y - guy.y;
   const d = Math.hypot(dx, dy) || 1;
 
   if (!swim.caught) {
-    // Easier: lower flee accel, cap speed, bigger catch radius
     const fleeBoost = clamp((300 - d) / 300, 0, 1);
-    const girlAccel = 720 * (0.35 + 0.55 * fleeBoost); // not too high
+    const girlAccel = 720 * (0.35 + 0.55 * fleeBoost);
     const girlMax = 300;
 
     girl.vx += (dx / d) * girlAccel * dt;
     girl.vy += (dy / d) * girlAccel * dt;
 
-    // small wiggle so she is not robotic
     girl.vx += Math.sin(performance.now() * 0.003) * 10 * dt;
     girl.vy += Math.cos(performance.now() * 0.003) * 10 * dt;
 
@@ -650,13 +630,11 @@ function updateSwim(dt) {
   } else {
     swim.kissT += dt;
 
-    // slow both down
     guy.vx *= dampFactor(0.78, dt);
     guy.vy *= dampFactor(0.78, dt);
     girl.vx *= dampFactor(0.78, dt);
     girl.vy *= dampFactor(0.78, dt);
 
-    // pull girl in for kiss
     girl.x += (guy.x - girl.x) * 0.08;
     girl.y += (guy.y - girl.y) * 0.08;
 
@@ -667,13 +645,11 @@ function updateSwim(dt) {
     }
   }
 
-  // integrate
   guy.x += guy.vx * dt;
   guy.y += guy.vy * dt;
   girl.x += girl.vx * dt;
   girl.y += girl.vy * dt;
 
-  // bounds
   const pad = 22;
   guy.x = clamp(guy.x, p.x + pad, p.x + p.w - pad);
   guy.y = clamp(guy.y, p.y + pad, p.y + p.h - pad);
@@ -681,19 +657,18 @@ function updateSwim(dt) {
   girl.y = clamp(girl.y, p.y + pad, p.y + p.h - pad);
 }
 function drawSwim() {
+  if (!swim) return;
   const w = W(), h = H();
   const p = swim.pool;
 
   ctx.fillStyle = "rgba(170, 235, 255, 0.65)";
   ctx.fillRect(0,0,w,h);
 
-  ctx.save();
   ctx.fillStyle = "rgba(255,255,255,0.7)";
   roundRect(p.x, p.y, p.w, p.h, 22, true, false);
   ctx.strokeStyle = "rgba(107,22,55,0.18)";
   ctx.lineWidth = 2;
   ctx.strokeRect(p.x, p.y, p.w, p.h);
-  ctx.restore();
 
   ctx.save();
   ctx.globalAlpha = 0.25;
@@ -729,15 +704,16 @@ function drawSwim() {
   ctx.fillStyle = "rgba(107,22,55,0.9)";
   ctx.font = "14px system-ui";
   ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
   ctx.fillText(swim.caught ? "Aww..." : "Tag: Catch her!", 16, 22);
 }
 
-// Valentine modal
+// Proposal
 let noAttempts = 0;
 
 function showProposal() {
   valModal.classList.add("show");
-  burnSub.textContent = "Choose wisely.";
+  burnSub.textContent = "I LOVE YOU FRONDOZO JULIE ANN SEMIRA NOSEJOB LOVEYDUBS";
   noHint.textContent = "If you press No, it gets annoying.";
   noAttempts = 0;
   modalNo.style.transform = "translate(0px, 0px) scale(1)";
@@ -766,20 +742,22 @@ function moveNoButton() {
 function annoyNo() {
   noAttempts += 1;
   const lines = ["No? are you sure?", "That is suspicious.", "Try again 😳", "You cannot escape.", "Ok stop.", "Just press Yes."];
-  burnSub.textContent = lines[Math.min(noAttempts - 1, lines.length - 1)];
-
+  overlayText.textContent = overlayText.textContent; // no-op, keeps layout stable
   const yesScale = clamp(1 + noAttempts * 0.10, 1, 1.7);
   modalYes.style.transform = `scale(${yesScale})`;
 
   if (noAttempts >= 2) moveNoButton();
   if (noAttempts >= 4) modalNo.style.opacity = "0.85";
   if (noAttempts >= 6) modalNo.style.opacity = "0.55";
+
+  // also rotate sub text slightly by cycling lines
+  burnSub.textContent = "I LOVE YOU FRONDOZO JULIE ANN SEMIRA NOSEJOB LOVEYDUBS";
+  noHint.textContent = lines[Math.min(noAttempts - 1, lines.length - 1)];
 }
 
 modalYes.onclick = () => {
   ensureAudioSafe();
   if (audioCtx && audioCtx.state === "suspended") audioCtx.resume?.();
-
   valModal.classList.remove("show");
   spawnConfetti();
   flowersModal.classList.add("show");
@@ -794,7 +772,7 @@ flowersRestart.onclick = () => {
   resetAll();
 };
 
-// Main loop
+// Loop
 let last = performance.now();
 function loop(now) {
   const dt = clamp((now - last) / 1000, 0, 0.05);
