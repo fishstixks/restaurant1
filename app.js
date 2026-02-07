@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!stage || !canvas || !ctx || !overlay || !startBtn) return;
 
-  // Never show an error UI
+  // Never show error UI
   window.addEventListener("error", (e) => { try { e.preventDefault(); } catch {} }, true);
   window.addEventListener("unhandledrejection", (e) => { try { e.preventDefault(); } catch {} }, true);
 
@@ -410,7 +410,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (karaoke.hit >= 8 && !karaoke.done) {
       karaoke.done = true;
       running = false;
-      showNextOverlay("Cleared!", "Next: Ice skating (faster) with moving obstacles.", "Next: Ice skating", () => {
+      showNextOverlay("Cleared!", "Next: Ice skating (slippery ball) with moving ice blocks.", "Next: Ice skating", () => {
         setScene(1);
         overlay.hidden = true;
         running = true;
@@ -474,61 +474,47 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.fillText(`Hit: ${karaoke.hit}/8   Miss: ${karaoke.miss}`, 16, 22);
   }
 
-  /* ---------------- Ice skating (FASTER + MOVING OBSTACLES + FEWER) ---------------- */
+  /* ---------------- Ice skating: ball, slippery, moving ice blocks ---------------- */
+  function makeIceBlocks(w, h) {
+    const blocks = [];
+    const count = 4; // fewer so it does not block collecting
 
-  function makeSkateObstacles(w, h) {
-    const obs = [];
-    const count = 5; // fewer so it doesn't block the map
-
-    const marginX = w * 0.08;
     const minY = h * 0.20;
-    const maxY = h * 0.86;
+    const maxY = h * 0.84;
 
     for (let i = 0; i < count; i++) {
-      const ww = rand(w * 0.12, w * 0.18);
-      const hh = rand(20, 28);
+      const bw = rand(w * 0.14, w * 0.22);
+      const bh = rand(22, 32);
+      const y = rand(minY, maxY - bh);
 
-      const y = rand(minY, maxY - hh);
-      const baseX = rand(marginX, w - marginX - ww);
+      // Spawn away from edges so it can travel
+      const x = rand(w * 0.18, w * 0.62);
+      const vx = rand(130, 210) * (Math.random() < 0.5 ? -1 : 1);
 
-      const ampRaw = rand(w * 0.06, w * 0.11);
-      const speed = rand(1.2, 2.2);
-      const phase = rand(0, Math.PI * 2);
-
-      obs.push({
-        x: baseX,
-        y,
-        w: ww,
-        h: hh,
-        baseX,
-        amp: ampRaw,
-        speed,
-        phase
-      });
+      blocks.push({ x, y, w: bw, h: bh, vx });
     }
-    return obs;
+    return blocks;
   }
 
-  function updateSkateObstacles(dt) {
+  function updateIceBlocks(dt) {
     if (!skate) return;
-    skate.t += dt;
     const w = W();
-    const margin = w * 0.06;
+    const margin = w * 0.08;
 
-    for (const o of skate.obstacles) {
+    for (const b of skate.blocks) {
+      b.x += b.vx * dt;
+
       const minX = margin;
-      const maxX = w - margin - o.w;
+      const maxX = w - margin - b.w;
 
-      const maxAmp = Math.max(0, Math.min(o.amp, o.baseX - minX, maxX - o.baseX));
-      const target = o.baseX + Math.sin(skate.t * o.speed + o.phase) * maxAmp;
-
-      o.x = clamp(target, minX, maxX);
+      if (b.x <= minX) { b.x = minX; b.vx = Math.abs(b.vx); }
+      if (b.x >= maxX) { b.x = maxX; b.vx = -Math.abs(b.vx); }
     }
   }
 
-  function safeTokenPos(x, y, obstacles, radius) {
-    for (const o of obstacles) {
-      const r = { x: o.x - radius, y: o.y - radius, w: o.w + radius * 2, h: o.h + radius * 2 };
+  function safeTokenPos(x, y, blocks, radius) {
+    for (const b of blocks) {
+      const r = { x: b.x - radius, y: b.y - radius, w: b.w + radius * 2, h: b.h + radius * 2 };
       if (circleRectHit(x, y, 1, r)) return false;
     }
     return true;
@@ -538,25 +524,25 @@ document.addEventListener("DOMContentLoaded", () => {
     const w = W(), h = H();
     skate = {
       player: { x: w * 0.45, y: h * 0.55, vx: 0, vy: 0 },
-      pr: 20,                  // smaller collider so it's easier to weave
-      collected: 0,
+      pr: 14,         // small ball collider
       goal: 6,
+      collected: 0,
       tokens: [],
-      obstacles: makeSkateObstacles(w, h),
+      blocks: makeIceBlocks(w, h),
       bonkCd: 0,
-      done: false,
-      t: 0
+      done: false
     };
 
-    // Place tokens so they aren't stuck behind obstacles
-    const tokenMinDist = 56;
+    // Place hearts in spots not immediately blocked
+    const tokenMinDist = 64;
     for (let i = 0; i < skate.goal; i++) {
       let placed = false;
-      for (let tries = 0; tries < 60 && !placed; tries++) {
-        const x = rand(60, w - 60);
-        const y = rand(70, h - 70);
 
-        if (!safeTokenPos(x, y, skate.obstacles, 34)) continue;
+      for (let tries = 0; tries < 80 && !placed; tries++) {
+        const x = rand(70, w - 70);
+        const y = rand(80, h - 80);
+
+        if (!safeTokenPos(x, y, skate.blocks, 48)) continue;
 
         let ok = true;
         for (const t of skate.tokens) {
@@ -568,58 +554,59 @@ document.addEventListener("DOMContentLoaded", () => {
         placed = true;
       }
 
-      if (!placed) {
-        skate.tokens.push({ x: rand(60, w - 60), y: rand(70, h - 70), alive: true });
-      }
+      if (!placed) skate.tokens.push({ x: rand(70, w - 70), y: rand(80, h - 80), alive: true });
     }
   }
 
-  // Lightweight skater icon (faster than emoji drawing on some devices)
-  function drawSkater(x, y, scale = 1) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(scale, scale);
-
-    // Two heads
-    ctx.fillStyle = "rgba(107,22,55,0.92)";
-    ctx.beginPath(); ctx.arc(-8, -14, 6, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(8, -14, 6, 0, Math.PI * 2); ctx.fill();
-
-    // Bodies
-    ctx.strokeStyle = "rgba(107,22,55,0.92)";
-    ctx.lineWidth = 4;
-    ctx.lineCap = "round";
+  function drawBallPlayer(x, y, r) {
+    // Outer glow
     ctx.beginPath();
-    ctx.moveTo(-8, -8); ctx.lineTo(-10, 6); // left
-    ctx.moveTo(8, -8);  ctx.lineTo(10, 6);  // right
-    ctx.stroke();
+    ctx.arc(x, y, r + 6, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,47,116,0.18)";
+    ctx.fill();
 
-    // Skates
-    ctx.strokeStyle = "rgba(255,255,255,0.95)";
-    ctx.lineWidth = 3;
+    // Ball gradient
+    const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 2, x, y, r);
+    g.addColorStop(0, "rgba(255,255,255,0.95)");
+    g.addColorStop(1, "rgba(255,47,116,0.95)");
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.moveTo(-18, 10); ctx.lineTo(-2, 10);
-    ctx.moveTo(2, 10);   ctx.lineTo(18, 10);
-    ctx.stroke();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Heart between them
-    ctx.fillStyle = "rgba(255,47,116,0.9)";
-    ctx.font = "14px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("❤", 0, -2);
+    // Little shine
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.beginPath();
+    ctx.arc(x - r * 0.35, y - r * 0.35, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-    ctx.restore();
+  function drawIceBlock(b) {
+    // Base ice
+    const g = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+    g.addColorStop(0, "rgba(120,210,255,0.35)");
+    g.addColorStop(1, "rgba(60,150,210,0.35)");
+    ctx.fillStyle = g;
+    roundRect(b.x, b.y, b.w, b.h, 12, true);
+
+    // Top shine
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    roundRect(b.x + 6, b.y + 6, b.w - 12, Math.max(6, b.h * 0.35), 10, true);
+
+    // Border
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
   }
 
   function updateSkate(dt) {
     if (!skate || skate.done) return;
-    const p = skate.player;
 
+    const p = skate.player;
     skate.bonkCd = Math.max(0, skate.bonkCd - dt);
 
-    // Move obstacles first so collision uses current position
-    updateSkateObstacles(dt);
+    // Make blocks move left-right
+    updateIceBlocks(dt);
 
     let ax = 0, ay = 0;
     if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
@@ -630,18 +617,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // MUCH FASTER skating
-    const accel = 2400;
-    const maxSpeed = 820;
+    // Fast + slippery
+    const accel = 2600;
+    const maxSpeed = 900;
 
     p.vx += ax * accel * dt;
     p.vy += ay * accel * dt;
 
-    // Mobile steering stronger
-    if (input.down) steerToward(p, input.x, input.y, 1700, dt);
+    // Mobile steering
+    if (input.down) steerToward(p, input.x, input.y, 1800, dt);
 
-    // Less damping so it feels snappy
-    const damp = dampFactor(0.90, dt);
+    // Slippy damping (close to 1 means it slides)
+    const damp = dampFactor(0.985, dt);
     p.vx *= damp;
     p.vy *= damp;
 
@@ -651,19 +638,20 @@ document.addEventListener("DOMContentLoaded", () => {
       p.vy = (p.vy / sp) * maxSpeed;
     }
 
+    // Move player and collide with moving blocks (use current block positions)
     integrateWithObstacles(
       p,
       skate.pr,
       dt,
       { x: 0, y: 0, w: W(), h: H(), pad: skate.pr },
-      skate.obstacles,
+      skate.blocks,
       []
     );
 
-    // Bonk feedback (cooldown)
+    // Bonk toast
     if (skate.bonkCd === 0) {
-      for (const r of skate.obstacles) {
-        if (circleRectHit(p.x, p.y, skate.pr, r)) {
+      for (const b of skate.blocks) {
+        if (circleRectHit(p.x, p.y, skate.pr, b)) {
           skate.bonkCd = 0.20;
           showToast("Bonk!");
           break;
@@ -671,15 +659,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Collect
+    // Collect hearts (no snow or ice emoji)
     for (const t of skate.tokens) {
       if (!t.alive) continue;
-      if (dist(p.x, p.y, t.x, t.y) < 34) {
+      if (dist(p.x, p.y, t.x, t.y) < 32) {
         t.alive = false;
         skate.collected += 1;
         score += 12;
         if (scoreEl) scoreEl.textContent = String(score);
-        showToast("❄️💗");
+        showToast("💗");
       }
     }
 
@@ -699,50 +687,40 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!skate) return;
     const w = W(), h = H();
 
-    ctx.fillStyle = "rgba(210,240,255,0.28)";
+    // Ice background
+    ctx.fillStyle = "rgba(210,240,255,0.30)";
     ctx.fillRect(0, 0, w, h);
 
-    // Ice stripes
-    ctx.fillStyle = "rgba(255,255,255,0.22)";
-    for (let i = 0; i < 8; i++) ctx.fillRect(w * 0.1, h * (0.15 + i * 0.1), w * 0.8, 4);
-
-    // Moving obstacles (left-right)
-    for (const r of skate.obstacles) {
-      ctx.fillStyle = "rgba(35,80,120,0.30)";
-      roundRect(r.x, r.y, r.w, r.h, 12, true);
-
-      ctx.strokeStyle = "rgba(255,255,255,0.65)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(r.x, r.y, r.w, r.h);
-
-      // Direction hint
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.font = "18px system-ui";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("↔", r.x + r.w / 2, r.y + r.h / 2);
+    // Flow lines to show “slip”
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    for (let i = 0; i < 10; i++) {
+      const y = h * (0.12 + i * 0.085);
+      ctx.fillRect(w * 0.08, y, w * 0.84, 3);
     }
 
-    // Tokens
+    // Moving ice blocks
+    for (const b of skate.blocks) drawIceBlock(b);
+
+    // Hearts
     for (const t of skate.tokens) {
       if (!t.alive) continue;
       ctx.font = "30px system-ui";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText("❄️💗", t.x, t.y);
+      ctx.fillText("💗", t.x, t.y);
     }
 
-    // Player (lightweight draw)
-    drawSkater(skate.player.x, skate.player.y, 1);
+    // Ball player
+    drawBallPlayer(skate.player.x, skate.player.y, skate.pr);
 
     ctx.fillStyle = "rgba(107,22,55,0.9)";
     ctx.font = "14px system-ui";
     ctx.textAlign = "left";
     ctx.textBaseline = "alphabetic";
-    ctx.fillText(`Collected: ${skate.collected}/${skate.goal}   Obstacles: ${skate.obstacles.length}`, 16, 22);
+    ctx.fillText(`Collected: ${skate.collected}/${skate.goal}`, 16, 22);
   }
 
-  /* ---------------- Swimming (kept from v10: slower + buoys) ---------------- */
+  /* ---------------- Swimming (same as your slower version) ---------------- */
   function makeBuoys(pool) {
     const buoys = [];
     const count = 9;
@@ -810,7 +788,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // slower swimming
     const guyAccel = 1500;
     const guyMax = 520;
 
@@ -1066,9 +1043,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (miniRow1) miniRow1.textContent = "Goal: Hit 8 notes.";
       if (miniRow2) miniRow2.textContent = "Tap anywhere (or Space).";
     } else if (scene === 1) {
-      if (subtitleEl) subtitleEl.textContent = "Mini-game 2: Ice skating. Faster movement + moving obstacles.";
-      if (miniRow1) miniRow1.textContent = "Goal: Collect 6 snow hearts.";
-      if (miniRow2) miniRow2.textContent = "Obstacles slide left-right.";
+      if (subtitleEl) subtitleEl.textContent = "Mini-game 2: Ice skating. Slippery ball + moving ice blocks.";
+      if (miniRow1) miniRow1.textContent = "Goal: Collect 6 hearts.";
+      if (miniRow2) miniRow2.textContent = "Ice blocks move left-right and you slip.";
     } else {
       if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. Slower chase + buoy obstacles.";
       if (miniRow1) miniRow1.textContent = "Goal: Catch her once.";
@@ -1089,11 +1066,11 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.textContent = "Start karaoke";
     } else if (scene === 1) {
       overlayTitle.textContent = "Ice skating";
-      overlayText.textContent = "Now faster. Collect 6 snow hearts. Obstacles move left-right.";
+      overlayText.textContent = "Collect 6 hearts. You slip, and ice blocks move left-right.";
       startBtn.textContent = "Start skating";
     } else {
       overlayTitle.textContent = "Swimming tag";
-      overlayText.textContent = "Slower than before. Avoid buoys while chasing.";
+      overlayText.textContent = "Avoid buoys while chasing.";
       startBtn.textContent = "Start swimming";
     }
 
