@@ -214,17 +214,6 @@ canvas { width: 100%; height: 100%; display: block; touch-action: none; }
 .bigYes { font-size: 18px; padding: 16px 22px; }
 .bigNo { font-size: 18px; padding: 16px 22px; position: relative; }
 
-.giftBouquet {
-  margin-top: 12px;
-  font-size: 88px;
-  filter: drop-shadow(0 18px 30px rgba(0,0,0,0.18));
-  animation: giftPop 520ms ease both;
-}
-@keyframes giftPop {
-  0% { transform: scale(0.86); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
 /* Floating hearts bg */
 .bg-hearts::before,
 .bg-hearts::after {

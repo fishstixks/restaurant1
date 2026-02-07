@@ -24,10 +24,6 @@ const modalNo = document.getElementById("modalNo");
 const burnBtns = document.getElementById("burnBtns");
 const noHint = document.getElementById("noHint");
 
-// Gift modal
-const giftModal = document.getElementById("giftModal");
-const giftRestart = document.getElementById("giftRestart");
-
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function rand(a, b) { return Math.random() * (b - a) + a; }
 function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
@@ -96,15 +92,6 @@ function beep(freq, ms, type = "sine", gain = 0.06) {
   g.connect(audioCtx.destination);
   o.start();
   o.stop(audioCtx.currentTime + ms / 1000);
-}
-function playYesMelody() {
-  ensureAudio();
-  const notes = [660, 740, 880, 990];
-  let t = 0;
-  for (const f of notes) {
-    setTimeout(() => beep(f, 120, "triangle", 0.06), t);
-    t += 130;
-  }
 }
 
 // Start button router
@@ -196,7 +183,7 @@ function setScene(n) {
     miniRow2.textContent = "Tip: It is slippery, dodge the bars.";
   } else {
     subtitleEl.textContent = "Final: Swimming tag. Catch her, then she wins.";
-    miniRow1.textContent = "Goal: Chase and tag. She tries to escape smarter now.";
+    miniRow1.textContent = "Goal: Use WASD/Arrows (or tap) to chase and tag.";
     miniRow2.textContent = "Tip: Tap near her to lunge toward her.";
   }
 
@@ -241,9 +228,6 @@ function resetAll() {
   scoreEl.textContent = String(score);
 
   valModal.classList.remove("show");
-  valModal.setAttribute("aria-hidden", "true");
-  giftModal.classList.remove("show");
-  giftModal.setAttribute("aria-hidden", "true");
 
   confetti = [];
   confettiTimer = 0;
@@ -473,6 +457,7 @@ function drawSkate() {
     ctx.fillText("❄️💗", tkn.x, tkn.y);
   }
 
+  // obstacles
   for (const o of skate.obstacles) {
     ctx.fillStyle = "rgba(40, 20, 30, 0.18)";
     ctx.fillRect(o.x, o.y, o.w, o.h);
@@ -492,7 +477,7 @@ function drawSkate() {
   ctx.fillText(`Collected: ${skate.collected}/${skate.goal}`, 16, 22);
 }
 
-// ===== Swimming Tag (harder + no corner camping) =====
+// ===== Swimming Tag (final) =====
 function initSwim() {
   const w = W(), h = H();
   const pad = 42;
@@ -501,30 +486,17 @@ function initSwim() {
     pool: { x: pad, y: pad, w: w - pad * 2, h: h - pad * 2, r: 22 },
     guy:  { x: w * 0.30, y: h * 0.55, r: 18, vx: 0, vy: 0 },
     girl: { x: w * 0.70, y: h * 0.45, r: 18, vx: 0, vy: 0 },
-
     dragGuy: 0.92,
-    accelGuy: 0.42,
-    maxGuy: 6.2,
-
-    // harder girl
     dragGirl: 0.93,
-    accelGirl: 0.46,
-    maxGirl: 7.4,
-
-    target: { x: w * 0.70, y: h * 0.45 },
-    targetTimer: 0,
-    dodgeSign: Math.random() < 0.5 ? 1 : -1,
-    dodgeTimer: 0,
-
-    lungeCd: 0,
-
+    accelGuy: 0.42,
+    accelGirl: 0.36,
+    maxGuy: 6.2,
+    maxGirl: 6.0,
     done: false
   };
 
-  pickNewEscapeTarget();
   showToast("Swim and tag!");
 }
-
 function keepInPool(p) {
   const pool = swim.pool;
   const minX = pool.x + p.r;
@@ -532,13 +504,11 @@ function keepInPool(p) {
   const minY = pool.y + p.r;
   const maxY = pool.y + pool.h - p.r;
 
-  // soft bounce
-  if (p.x < minX) { p.x = minX; p.vx = Math.abs(p.vx) * 0.35; }
-  if (p.x > maxX) { p.x = maxX; p.vx = -Math.abs(p.vx) * 0.35; }
-  if (p.y < minY) { p.y = minY; p.vy = Math.abs(p.vy) * 0.35; }
-  if (p.y > maxY) { p.y = maxY; p.vy = -Math.abs(p.vy) * 0.35; }
+  if (p.x < minX) { p.x = minX; p.vx *= -0.5; }
+  if (p.x > maxX) { p.x = maxX; p.vx *= -0.5; }
+  if (p.y < minY) { p.y = minY; p.vy *= -0.5; }
+  if (p.y > maxY) { p.y = maxY; p.vy *= -0.5; }
 }
-
 function limitSpeed(p, maxV) {
   const sp = Math.hypot(p.vx, p.vy);
   if (sp > maxV) {
@@ -546,77 +516,10 @@ function limitSpeed(p, maxV) {
     p.vy = (p.vy / sp) * maxV;
   }
 }
-
-function wallRepelVec(x, y) {
-  const pool = swim.pool;
-  const margin = 92;
-  const left = x - pool.x;
-  const right = (pool.x + pool.w) - x;
-  const top = y - pool.y;
-  const bottom = (pool.y + pool.h) - y;
-
-  let rx = 0, ry = 0;
-
-  function push(d, dirX, dirY) {
-    if (d >= margin) return;
-    const t = (margin - d) / margin;          // 0..1
-    const s = (t * t) * 1.35;                 // stronger near wall
-    rx += dirX * s;
-    ry += dirY * s;
-  }
-
-  push(left,  1,  0);
-  push(right, -1, 0);
-  push(top,   0,  1);
-  push(bottom,0, -1);
-
-  return { x: rx, y: ry };
-}
-
-function edgePenalty(px, py) {
-  const pool = swim.pool;
-  const left = px - pool.x;
-  const right = (pool.x + pool.w) - px;
-  const top = py - pool.y;
-  const bottom = (pool.y + pool.h) - py;
-  const nearest = Math.min(left, right, top, bottom);
-  return 1 / Math.max(12, nearest); // larger when nearer to wall
-}
-
-function pickNewEscapeTarget() {
-  const pool = swim.pool;
-  const gx = swim.guy.x, gy = swim.guy.y;
-
-  let best = null;
-  let bestScore = -1e9;
-
-  // sample points, prefer far from guy and not near edges
-  for (let i = 0; i < 14; i++) {
-    const px = rand(pool.x + 40, pool.x + pool.w - 40);
-    const py = rand(pool.y + 40, pool.y + pool.h - 40);
-    const d = dist(px, py, gx, gy);
-
-    const pen = edgePenalty(px, py);          // smaller is better
-    const score = d - (pen * 520);            // punish wall hugging
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = { x: px, y: py };
-    }
-  }
-
-  swim.target = best || { x: pool.x + pool.w * 0.5, y: pool.y + pool.h * 0.5 };
-  swim.targetTimer = rand(0.35, 0.8);
-
-  // flip dodge direction occasionally so she feels “alive”
-  swim.dodgeTimer = rand(0.35, 0.75);
-  if (Math.random() < 0.55) swim.dodgeSign *= -1;
-}
-
-function updateSwim(dt) {
+function updateSwim() {
   if (swim.done) return;
 
-  // guy control
+  // Guy control
   let ax = 0, ay = 0;
   if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
   if (keys["KeyD"] || keys["ArrowRight"]) ax += 1;
@@ -629,15 +532,13 @@ function updateSwim(dt) {
   swim.guy.vx += ax * swim.accelGuy;
   swim.guy.vy += ay * swim.accelGuy;
 
-  // tap lunge (cooldown so it feels fair)
-  swim.lungeCd = Math.max(0, swim.lungeCd - dt);
-  if (input.pointerJustDown && swim.lungeCd <= 0) {
+  // Tap lunge
+  if (input.pointerJustDown) {
     const dx = input.x - swim.guy.x;
     const dy = input.y - swim.guy.y;
     const d = Math.hypot(dx, dy) || 1;
-    swim.guy.vx += (dx / d) * 2.7;
-    swim.guy.vy += (dy / d) * 2.7;
-    swim.lungeCd = 0.22;
+    swim.guy.vx += (dx / d) * 2.8;
+    swim.guy.vy += (dy / d) * 2.8;
   }
 
   swim.guy.vx *= swim.dragGuy;
@@ -648,107 +549,60 @@ function updateSwim(dt) {
   swim.guy.y += swim.guy.vy;
   keepInPool(swim.guy);
 
-  // girl brain
-  const gx = swim.guy.x, gy = swim.guy.y;
-  const girl = swim.girl;
+  // Girl AI: runs away
+  const rx = swim.girl.x - swim.guy.x;
+  const ry = swim.girl.y - swim.guy.y;
+  const rd = Math.hypot(rx, ry) || 1;
 
-  const toGuyX = gx - girl.x;
-  const toGuyY = gy - girl.y;
-  const dGuy = Math.hypot(toGuyX, toGuyY) || 1;
+  // away direction
+  let gx = (rx / rd);
+  let gy = (ry / rd);
 
-  // refresh target regularly or if target reached
-  swim.targetTimer -= dt;
-  swim.dodgeTimer -= dt;
-  const dTarget = dist(girl.x, girl.y, swim.target.x, swim.target.y);
-  if (swim.targetTimer <= 0 || dTarget < 70) pickNewEscapeTarget();
+  // add small jitter so she feels alive
+  gx += rand(-0.18, 0.18);
+  gy += rand(-0.18, 0.18);
+  const gn = Math.hypot(gx, gy) || 1;
+  gx /= gn; gy /= gn;
 
-  // seek target
-  let sx = swim.target.x - girl.x;
-  let sy = swim.target.y - girl.y;
-  const sd = Math.hypot(sx, sy) || 1;
-  sx /= sd; sy /= sd;
+  swim.girl.vx += gx * swim.accelGirl;
+  swim.girl.vy += gy * swim.accelGirl;
 
-  // flee guy
-  let fx = -(toGuyX / dGuy);
-  let fy = -(toGuyY / dGuy);
+  // also steer away from walls slightly
+  const pool = swim.pool;
+  const left = swim.girl.x - pool.x;
+  const right = (pool.x + pool.w) - swim.girl.x;
+  const top = swim.girl.y - pool.y;
+  const bottom = (pool.y + pool.h) - swim.girl.y;
+  const wallPush = 0.22;
+  if (left < 70) swim.girl.vx += wallPush;
+  if (right < 70) swim.girl.vx -= wallPush;
+  if (top < 70) swim.girl.vy += wallPush;
+  if (bottom < 70) swim.girl.vy -= wallPush;
 
-  // dodge sideways when close (harder + stops straight-line corner pin)
-  let dx = 0, dy = 0;
-  if (dGuy < 210) {
-    // perpendicular to toGuy
-    dx = (-toGuyY / dGuy) * swim.dodgeSign;
-    dy = (toGuyX / dGuy) * swim.dodgeSign;
-  }
+  swim.girl.vx *= swim.dragGirl;
+  swim.girl.vy *= swim.dragGirl;
+  limitSpeed(swim.girl, swim.maxGirl);
 
-  // wall repel
-  const wr = wallRepelVec(girl.x, girl.y);
+  swim.girl.x += swim.girl.vx;
+  swim.girl.y += swim.girl.vy;
+  keepInPool(swim.girl);
 
-  // if she is very close, she gets a burst away
-  const panic = dGuy < 140 ? 1.0 : (dGuy < 220 ? 0.55 : 0.25);
-
-  // combine steering
-  // weights chosen to avoid edge camping and keep her moving unpredictably
-  let steerX =
-    sx * 0.55 +
-    fx * (0.55 + panic) +
-    dx * (0.30 + panic * 0.35) +
-    wr.x * 0.95;
-
-  let steerY =
-    sy * 0.55 +
-    fy * (0.55 + panic) +
-    dy * (0.30 + panic * 0.35) +
-    wr.y * 0.95;
-
-  const st = Math.hypot(steerX, steerY) || 1;
-  steerX /= st; steerY /= st;
-
-  girl.vx += steerX * swim.accelGirl;
-  girl.vy += steerY * swim.accelGirl;
-
-  girl.vx *= swim.dragGirl;
-  girl.vy *= swim.dragGirl;
-  limitSpeed(girl, swim.maxGirl);
-
-  girl.x += girl.vx;
-  girl.y += girl.vy;
-  keepInPool(girl);
-
-  // anti-stuck: if slow and near a wall, push toward center
-  const sp = Math.hypot(girl.vx, girl.vy);
-  if (sp < 0.55) {
-    const pool = swim.pool;
-    const left = girl.x - pool.x;
-    const right = (pool.x + pool.w) - girl.x;
-    const top = girl.y - pool.y;
-    const bottom = (pool.y + pool.h) - girl.y;
-    const nearest = Math.min(left, right, top, bottom);
-    if (nearest < 60) {
-      const cx = pool.x + pool.w * 0.5;
-      const cy = pool.y + pool.h * 0.5;
-      const ux = cx - girl.x;
-      const uy = cy - girl.y;
-      const ud = Math.hypot(ux, uy) || 1;
-      girl.vx += (ux / ud) * 1.2;
-      girl.vy += (uy / ud) * 1.2;
-    }
-  }
-
-  // tag check
-  if (dist(swim.guy.x, swim.guy.y, girl.x, girl.y) < swim.guy.r + girl.r) {
+  // Tag check
+  if (dist(swim.guy.x, swim.guy.y, swim.girl.x, swim.girl.y) < swim.guy.r + swim.girl.r) {
     swim.done = true;
     running = false;
 
     score += 25;
     scoreEl.textContent = String(score);
 
+    ensureAudio();
+    beep(640, 90, "triangle", 0.06);
     showToast("TAG! She wins 😳");
 
-    // show proposal now, and only now
+    // ONLY trigger proposal here (end of final game)
     showProposal();
   }
 }
-
 function drawRoundedRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -758,14 +612,15 @@ function drawRoundedRect(x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
-
 function drawSwim() {
   const w = W(), h = H();
   const pool = swim.pool;
 
+  // water background
   ctx.fillStyle = "rgba(160, 225, 255, 0.22)";
   ctx.fillRect(0, 0, w, h);
 
+  // pool
   ctx.save();
   drawRoundedRect(pool.x, pool.y, pool.w, pool.h, pool.r);
   ctx.fillStyle = "rgba(60, 160, 220, 0.28)";
@@ -787,13 +642,7 @@ function drawSwim() {
     ctx.stroke();
   }
 
-  // target hint (tiny dot, optional)
-  ctx.beginPath();
-  ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
-  ctx.arc(swim.target.x, swim.target.y, 5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // girl
+  // girl (runner)
   ctx.beginPath();
   ctx.fillStyle = "rgba(255, 47, 116, 0.90)";
   ctx.arc(swim.girl.x, swim.girl.y, swim.girl.r, 0, Math.PI * 2);
@@ -804,7 +653,7 @@ function drawSwim() {
   ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.fillText("👧", swim.girl.x, swim.girl.y);
 
-  // guy
+  // guy (chaser)
   ctx.beginPath();
   ctx.fillStyle = "rgba(90, 80, 255, 0.88)";
   ctx.arc(swim.guy.x, swim.guy.y, swim.guy.r, 0, Math.PI * 2);
@@ -812,11 +661,12 @@ function drawSwim() {
   ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.fillText("👦", swim.guy.x, swim.guy.y);
 
+  // HUD
   ctx.fillStyle = "rgba(107, 22, 55, 0.9)";
   ctx.font = "14px system-ui";
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  ctx.fillText("Tag her to finish (she wins). She dodges walls now.", 16, 22);
+  ctx.fillText("Tag her to finish (she wins).", 16, 22);
 }
 
 // ===== Valentine modal logic =====
@@ -847,8 +697,7 @@ function moveNoButton() {
   const dx = x - (btn.left - area.left);
   const dy = y - (btn.top - area.top);
 
-  modalNo.style.transform =
-    `translate(${dx}px, ${dy}px) rotate(${rand(-6, 6)}deg) scale(${clamp(1 - noAttempts * 0.08, 0.45, 1)})`;
+  modalNo.style.transform = `translate(${dx}px, ${dy}px) rotate(${rand(-6, 6)}deg) scale(${clamp(1 - noAttempts * 0.08, 0.45, 1)})`;
 }
 
 function annoyNo() {
@@ -868,27 +717,17 @@ function annoyNo() {
 }
 
 modalYes.onclick = () => {
-  // close question
+  ensureAudio();
   valModal.classList.remove("show");
   valModal.setAttribute("aria-hidden", "true");
-
-  // reward
   spawnConfetti();
-  playYesMelody();
+  beep(660, 120, "triangle", 0.06);
 
-  // show bouquet gift
-  giftModal.classList.add("show");
-  giftModal.setAttribute("aria-hidden", "false");
+  showNextOverlay("YAY 💖", "She said YES!!", "Restart", () => resetAll());
 };
 
 modalNo.onmouseenter = () => { annoyNo(); moveNoButton(); };
 modalNo.onpointerdown = (e) => { e.preventDefault(); annoyNo(); moveNoButton(); };
-
-giftRestart.onclick = () => {
-  giftModal.classList.remove("show");
-  giftModal.setAttribute("aria-hidden", "true");
-  resetAll();
-};
 
 // Main loop
 let last = performance.now();
@@ -918,8 +757,6 @@ function boot() {
 
   valModal.classList.remove("show");
   valModal.setAttribute("aria-hidden", "true");
-  giftModal.classList.remove("show");
-  giftModal.setAttribute("aria-hidden", "true");
 
   scoreEl.textContent = String(score);
   setScene(0);
