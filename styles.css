@@ -281,3 +281,31 @@ canvas { width: 100%; height: 100%; display: block; touch-action: none; }
   display: block;
   margin: 12px auto;
 }
+
+
+/* ===== Fix photo overlay on phones: keep button reachable ===== */
+.overlay { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.overlayCard {
+  max-height: 92vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.overlayText {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 10px;
+}
+
+/* Limit image height inside overlay so it doesn't push the button off-screen */
+.overlayText img { max-height: 55vh; object-fit: contain; }
+
+/* Keep the action button reachable */
+#startBtn { position: sticky; bottom: 0; }
+
+/* On small screens, align overlay content to the top so you can scroll down */
+@media (max-width: 600px) {
+  .overlay { place-items: start center; padding: 12px; }
+  .overlayCard { width: min(560px, 96%); max-height: 90vh; }
+  .overlayText img { max-height: 48vh; }
+}
