@@ -369,12 +369,18 @@ document.addEventListener("DOMContentLoaded", () => {
     if (karaoke.hit >= 8 && !karaoke.done) {
       karaoke.done = true;
       running = false;
-      showNextOverlay("Cleared!", "Next: Ice skating (slip zones).", "Next: Ice skating", () => {
-        setScene(1);
-        overlay.hidden = true;
-        running = true;
-        resetSceneState();
-      });
+      showPhotoOverlay(
+        "Cleared!",
+        "Karaoke cleared ✅",
+        "karaoke_win.png",
+        "Next: Ice skating",
+        () => {
+          setScene(1);
+          overlay.hidden = true;
+          running = true;
+          resetSceneState();
+        }
+      );
     }
   }
   function drawKaraoke() {
@@ -435,21 +441,39 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ---------------- Ice skating: moving slip zones, NOT blockers ---------------- */
   function makeIceZones(w, h) {
     const zones = [];
-    const count = 4; // fewer
+    const count = 1; // ultra few for mobile
+
+    // Spawn safe zone (center of rink)
+    const spawn = { x: w * 0.5, y: h * 0.55, r: 140 };
 
     const minY = h * 0.22;
     const maxY = h * 0.84;
 
     for (let i = 0; i < count; i++) {
-      const zw = rand(w * 0.16, w * 0.26);
-      const zh = rand(22, 34);
-      const y = rand(minY, maxY - zh);
+      let zw = rand(w * 0.18, w * 0.26);
+      let zh = rand(22, 34);
 
-      // Start anywhere, wrap across full screen
-      const x = rand(-zw, w);
-      const vx = rand(260, 420) * (Math.random() < 0.5 ? -1 : 1);
+      let placed = false;
+      for (let tries = 0; tries < 80 && !placed; tries++) {
+        const y = rand(minY, maxY - zh);
+        const x = rand(-zw, w);
 
-      zones.push({ x, y, w: zw, h: zh, vx });
+        // keep ice away from spawn zone (with buffer)
+        const z = { x, y, w: zw, h: zh, vx: 0 };
+        const safe = !circleRectHit(spawn.x, spawn.y, spawn.r, z);
+        if (!safe) continue;
+
+        const vx = rand(120, 190) * (Math.random() < 0.5 ? -1 : 1); // slower
+        zones.push({ x, y, w: zw, h: zh, vx });
+        placed = true;
+      }
+
+      if (!placed) {
+        const y = rand(minY, maxY - zh);
+        const x = rand(-zw, w);
+        const vx = rand(120, 190) * (Math.random() < 0.5 ? -1 : 1);
+        zones.push({ x, y, w: zw, h: zh, vx });
+      }
     }
     return zones;
   }
@@ -477,6 +501,7 @@ document.addEventListener("DOMContentLoaded", () => {
   function initSkate() {
     const w = W(), h = H();
     skate = {
+      spawn:  { x: w * 0.5, y: h * 0.55, r: 150 },
       player: { x: w * 0.5, y: h * 0.55, vx: 0, vy: 0 },
       pr: 14,
       goal: 6,
@@ -484,10 +509,9 @@ document.addEventListener("DOMContentLoaded", () => {
       tokens: [],
       ice: makeIceZones(w, h),
 
-      slipping: false,
-      slipT: 0,
-      slipDur: 0.65,   // time you slide before reset
-      slipCd: 0        // prevents re-trigger spam
+      spawnShield: 1.4, // seconds: ignore ice after spawn
+      resetting: false,
+      resetT: 0
     };
 
     // Place hearts away from ice (at spawn time)
@@ -570,67 +594,78 @@ document.addEventListener("DOMContentLoaded", () => {
     const p = skate.player;
 
     updateIceZones(dt);
-    skate.slipCd = Math.max(0, skate.slipCd - dt);
 
-    // If you touch ice, you slip (NO blocking)
-    for (const z of skate.ice) {
-      if (circleRectHit(p.x, p.y, skate.pr, z)) {
-        triggerSlip();
-        break;
+    // Spawn safe zone + short invulnerability timer
+    skate.spawnShield = Math.max(0, (skate.spawnShield || 0) - dt);
+    const inSafeZone = dist(p.x, p.y, skate.spawn.x, skate.spawn.y) <= skate.spawn.r;
+
+    // If you touched ice: slow down, then quick reset (no long sliding)
+    if (!skate.resetting && !inSafeZone && skate.spawnShield <= 0) {
+      for (const z of skate.ice) {
+        if (circleRectHit(p.x, p.y, skate.pr, z)) {
+          skate.resetting = true;
+          skate.resetT = 0;
+          // Hard slow immediately
+          p.vx *= 0.18;
+          p.vy *= 0.18;
+          showToast("Slowed!");
+          break;
+        }
       }
     }
 
-    if (!skate.slipping) {
-      // Normal control but slippery
-      let ax = 0, ay = 0;
-      if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
-      if (keys["KeyD"] || keys["ArrowRight"]) ax += 1;
-      if (keys["KeyW"] || keys["ArrowUp"]) ay -= 1;
-      if (keys["KeyS"] || keys["ArrowDown"]) ay += 1;
+    // During reset: freeze you briefly then pop back to spawn
+    if (skate.resetting) {
+      skate.resetT += dt;
 
-      const n = Math.hypot(ax, ay) || 1;
-      ax /= n; ay /= n;
-
-      const accel = 2600;
-      const maxSpeed = 920;
-
-      p.vx += ax * accel * dt;
-      p.vy += ay * accel * dt;
-
-      if (input.down) steerToward(p, input.x, input.y, 1900, dt);
-
-      // slippery damping
-      const damp = dampFactor(0.987, dt);
-      p.vx *= damp;
-      p.vy *= damp;
-
-      const sp = Math.hypot(p.vx, p.vy);
-      if (sp > maxSpeed) {
-        p.vx = (p.vx / sp) * maxSpeed;
-        p.vy = (p.vy / sp) * maxSpeed;
-      }
-
-      integrate(p, skate.pr, dt, { x: 0, y: 0, w, h, pad: skate.pr });
-    } else {
-      // Sliding phase
-      skate.slipT += dt;
-
-      // Very little friction while sliding
-      p.vx *= dampFactor(0.996, dt);
-      p.vy *= dampFactor(0.996, dt);
+      // Heavy damping so you don't drift far
+      p.vx *= dampFactor(0.55, dt);
+      p.vy *= dampFactor(0.55, dt);
 
       integrate(p, skate.pr, dt, { x: 0, y: 0, w, h, pad: skate.pr });
 
-      if (skate.slipT >= skate.slipDur) {
-        // reset to middle
-        p.x = w * 0.5;
-        p.y = h * 0.55;
+      if (skate.resetT >= 0.22) {
+        p.x = skate.spawn.x;
+        p.y = skate.spawn.y;
         p.vx = 0;
         p.vy = 0;
-        skate.slipping = false;
-        showToast("Back to middle!");
+        skate.resetting = false;
+        skate.spawnShield = 1.2; // give a moment to move away
+        showToast("Reset!");
       }
+      return;
     }
+
+    // Normal control (less slippery for phone)
+    let ax = 0, ay = 0;
+    if (keys["KeyA"] || keys["ArrowLeft"]) ax -= 1;
+    if (keys["KeyD"] || keys["ArrowRight"]) ax += 1;
+    if (keys["KeyW"] || keys["ArrowUp"]) ay -= 1;
+    if (keys["KeyS"] || keys["ArrowDown"]) ay += 1;
+
+    const n = Math.hypot(ax, ay) || 1;
+    ax /= n; ay /= n;
+
+    const accel = 1750;
+    const maxSpeed = 620;
+
+    p.vx += ax * accel * dt;
+    p.vy += ay * accel * dt;
+
+    if (input.down) steerToward(p, input.x, input.y, 1350, dt);
+
+    // Stronger friction so you don't slip far
+    const damp = dampFactor(0.90, dt);
+    p.vx *= damp;
+    p.vy *= damp;
+
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp > maxSpeed) {
+      p.vx = (p.vx / sp) * maxSpeed;
+      p.vy = (p.vy / sp) * maxSpeed;
+    }
+
+    integrate(p, skate.pr, dt, { x: 0, y: 0, w, h, pad: skate.pr });
 
     // Collect hearts
     for (const t of skate.tokens) {
@@ -646,12 +681,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (skate.collected >= skate.goal) {
       running = false;
-      showNextOverlay("Cleared!", "Final: Swimming tag (harder).", "Next: Swimming", () => {
-        setScene(2);
-        overlay.hidden = true;
-        running = true;
-        resetSceneState();
-      });
+      showPhotoOverlay(
+        "Cleared!",
+        "Ice skating cleared ✅",
+        "ice_win.png",
+        "Next: Swimming",
+        () => {
+          setScene(2);
+          overlay.hidden = true;
+          running = true;
+          resetSceneState();
+        }
+      );
       // prevent repeating
       skate.collected = -9999;
     }
@@ -692,15 +733,29 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ---------------- Swimming (harder) ---------------- */
   function makeBuoys(pool) {
     const buoys = [];
-    const count = 12; // more obstacles
+    const count = 1; // ultra few for mobile
+
     for (let i = 0; i < count; i++) {
-      const r = rand(18, 28);
+      const r = 22;
+
+      // Try to place it far from the center-ish starts
+      let x = 0, y = 0;
+      const avoid1 = { x: pool.x + pool.w * 0.30, y: pool.y + pool.h * 0.55 };
+      const avoid2 = { x: pool.x + pool.w * 0.70, y: pool.y + pool.h * 0.40 };
+      let placed = false;
+
+      for (let tries = 0; tries < 80 && !placed; tries++) {
+        x = rand(pool.x + 80, pool.x + pool.w - 80);
+        y = rand(pool.y + 80, pool.y + pool.h - 80);
+        if (dist(x, y, avoid1.x, avoid1.y) < 180) continue;
+        if (dist(x, y, avoid2.x, avoid2.y) < 180) continue;
+        placed = true;
+      }
+
       buoys.push({
-        x: rand(pool.x + 70, pool.x + pool.w - 70),
-        y: rand(pool.y + 70, pool.y + pool.h - 70),
-        r,
-        vx: rand(-140, 140), // faster
-        vy: rand(-130, 130)  // faster
+        x, y, r,
+        vx: rand(-70, 70), // slower
+        vy: rand(-65, 65)  // slower
       });
     }
     return buoys;
@@ -893,7 +948,16 @@ document.addEventListener("DOMContentLoaded", () => {
       if (swim.kissT > 1.35 && !swim.proposalShown) {
         swim.proposalShown = true;
         running = false;
-        showProposal();
+        showPhotoOverlay(
+          "Cleared!",
+          "Swimming cleared ✅",
+          "swim_win.png",
+          "Next",
+          () => {
+            overlay.hidden = true;
+            showProposal();
+          }
+        );
       }
     }
   }
@@ -1073,6 +1137,43 @@ document.addEventListener("DOMContentLoaded", () => {
       running = true;
       resetSceneState();
     };
+  }
+
+
+  function showPhotoOverlay(title, caption, imgSrc, btnText, action) {
+    overlay.hidden = false;
+    overlayTitle.textContent = title;
+
+    // Clear and rebuild overlay content
+    overlayText.textContent = "";
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gap = "12px";
+    wrap.style.justifyItems = "center";
+    wrap.style.textAlign = "center";
+
+    if (caption) {
+      const p = document.createElement("div");
+      p.textContent = caption;
+      p.style.opacity = "0.92";
+      wrap.appendChild(p);
+    }
+
+    const img = document.createElement("img");
+    img.src = imgSrc;
+    img.alt = title;
+    img.style.maxWidth = "min(520px, 92vw)";
+    img.style.width = "100%";
+    img.style.borderRadius = "16px";
+    img.style.boxShadow = "0 10px 30px rgba(0,0,0,0.25)";
+    img.style.userSelect = "none";
+    img.draggable = false;
+
+    wrap.appendChild(img);
+    overlayText.appendChild(wrap);
+
+    startBtn.textContent = btnText;
+    overlayAction = action;
   }
 
   function showNextOverlay(title, text, btnText, action) {
