@@ -648,8 +648,7 @@ function safeTokenPos(x, y, ice, radius) {
     skate.spawnShield = Math.max(0, (skate.spawnShield || 0) - dt);
     const inSafeZone = dist(p.x, p.y, skate.spawn.x, skate.spawn.y) <= skate.spawn.r;
 
-    // Touching moving ice should FEEL like a slow-down (not an instant teleport).
-    // We apply a slow state for a short time, then reset you to the middle.
+    // If you touched ice: apply an obvious slow, then reset to the middle.
     if (!skate.resetting && !inSafeZone && skate.spawnShield <= 0) {
       let hitIce = false;
       for (const z of skate.ice) {
@@ -658,22 +657,28 @@ function safeTokenPos(x, y, ice, radius) {
       if (hitIce) {
         skate.resetting = true;
         skate.resetT = 0;
-        skate.iceSlowT = 1.3;
-        // Immediate speed cut so the slow is obvious right away
-        p.vx *= 0.25;
-        p.vy *= 0.25;
+        skate.iceSlowT = 0.75;
+        // Immediate speed cut so it feels like "sticky ice"
+        p.vx *= 0.35;
+        p.vy *= 0.35;
         showToast("Slowed!");
       }
     }
 
-    // Countdown slow timer (also used to reduce accel/max speed below)
-    skate.iceSlowT = Math.max(0, (skate.iceSlowT || 0) - dt);
-
-    // If we are in the reset window, wait a bit so you actually experience the slow,
-    // then pop back to spawn.
+    // During reset: you stay slow for a moment, then pop back to spawn
     if (skate.resetting) {
       skate.resetT += dt;
-      if (skate.resetT >= 1.1) {
+
+      skate.iceSlowT = Math.max(0, (skate.iceSlowT || 0) - dt);
+
+      // Heavy damping so you don't drift far
+      const slowDampBase = (skate.iceSlowT > 0) ? 0.42 : 0.55;
+      p.vx *= dampFactor(slowDampBase, dt);
+      p.vy *= dampFactor(slowDampBase, dt);
+
+      integrate(p, skate.pr, dt, { x: 0, y: 0, w, h, pad: skate.pr });
+
+      if (skate.resetT >= 0.35) {
         p.x = skate.spawn.x;
         p.y = skate.spawn.y;
         p.vx = 0;
@@ -682,6 +687,7 @@ function safeTokenPos(x, y, ice, radius) {
         skate.spawnShield = 1.2; // give a moment to move away
         showToast("Reset!");
       }
+      return;
     }
 
     // Normal control (less slippery for phone)
@@ -694,18 +700,16 @@ function safeTokenPos(x, y, ice, radius) {
     const n = Math.hypot(ax, ay) || 1;
     ax /= n; ay /= n;
 
-    // Slow effect: dramatically lower acceleration + max speed while slowed.
-    const slowed = (skate.iceSlowT || 0) > 0;
-    const accel = slowed ? 520 : 1750;
-    const maxSpeed = slowed ? 140 : 620;
+    const accel = 1750;
+    const maxSpeed = 620;
 
     p.vx += ax * accel * dt;
     p.vy += ay * accel * dt;
 
     if (input.down) steerToward(p, input.x, input.y, 1350, dt);
 
-    // Stronger friction while slowed so it feels "sticky"
-    const damp = dampFactor(slowed ? 0.76 : 0.90, dt);
+    // Stronger friction so you don't slip far
+    const damp = dampFactor(0.90, dt);
     p.vx *= damp;
     p.vy *= damp;
 
