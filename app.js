@@ -71,6 +71,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }, { passive: false });
   });
 
+  // Lock/unlock page scroll ONLY while the mini-games are running.
+  // This prevents accidental page scrolling during skating/swimming drags,
+  // while still allowing the outside page to scroll normally.
+  let savedScrollY = 0;
+  function lockPageScroll() {
+    savedScrollY = window.scrollY || 0;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    // Prevent iOS rubber-band scroll.
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${savedScrollY}px`;
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+  }
+  function unlockPageScroll() {
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.width = "";
+    window.scrollTo(0, savedScrollY);
+  }
+
 function roundRect(x, y, w, h, r, fill) {
     const rr = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
@@ -458,7 +484,8 @@ function roundRect(x, y, w, h, r, fill) {
   /* ---------------- Ice skating: moving slip zones, NOT blockers ---------------- */
   function makeIceZones(w, h) {
     const zones = [];
-    const count = 5; // more moving ice zones for challenge
+    // More and larger ice zones so skating is harder, and collisions are obvious.
+    const count = 10;
 
     // Spawn safe zone (center of rink)
     const spawn = { x: w * 0.5, y: h * 0.55, r: 140 };
@@ -467,8 +494,8 @@ function roundRect(x, y, w, h, r, fill) {
     const maxY = h * 0.84;
 
     for (let i = 0; i < count; i++) {
-      let zw = rand(w * 0.18, w * 0.26);
-      let zh = rand(22, 34);
+      let zw = rand(w * 0.22, w * 0.34);
+      let zh = rand(54, 80);
 
       let placed = false;
       for (let tries = 0; tries < 80 && !placed; tries++) {
@@ -480,7 +507,7 @@ function roundRect(x, y, w, h, r, fill) {
         const safe = !circleRectHit(spawn.x, spawn.y, spawn.r, z);
         if (!safe) continue;
 
-        const vx = rand(120, 190) * (Math.random() < 0.5 ? -1 : 1); // slower
+        const vx = rand(130, 210) * (Math.random() < 0.5 ? -1 : 1);
         zones.push({ x, y, w: zw, h: zh, vx });
         placed = true;
       }
@@ -488,7 +515,7 @@ function roundRect(x, y, w, h, r, fill) {
       if (!placed) {
         const y = rand(minY, maxY - zh);
         const x = rand(-zw, w);
-        const vx = rand(120, 190) * (Math.random() < 0.5 ? -1 : 1);
+        const vx = rand(130, 210) * (Math.random() < 0.5 ? -1 : 1);
         zones.push({ x, y, w: zw, h: zh, vx });
       }
     }
@@ -527,6 +554,9 @@ function safeTokenPos(x, y, ice, radius) {
       collected: 0,
       tokens: [],
       ice: makeIceZones(w, h),
+
+      // When you touch ice, you become slow for a short while.
+      iceSlowT: 0,
 
       spawnShield: 1.4, // seconds: ignore ice after spawn
       resetting: false,
@@ -578,8 +608,8 @@ function safeTokenPos(x, y, ice, radius) {
 
   function drawIceZone(z) {
     const g = ctx.createLinearGradient(z.x, z.y, z.x + z.w, z.y + z.h);
-    g.addColorStop(0, "rgba(140,230,255,0.30)");
-    g.addColorStop(1, "rgba(60,160,220,0.30)");
+    g.addColorStop(0, "rgba(140,230,255,0.48)");
+    g.addColorStop(1, "rgba(60,160,220,0.48)");
     ctx.fillStyle = g;
     roundRect(z.x, z.y, z.w, z.h, 12, true);
 
@@ -618,32 +648,37 @@ function safeTokenPos(x, y, ice, radius) {
     skate.spawnShield = Math.max(0, (skate.spawnShield || 0) - dt);
     const inSafeZone = dist(p.x, p.y, skate.spawn.x, skate.spawn.y) <= skate.spawn.r;
 
-    // If you touched ice: slow down, then quick reset (no long sliding)
+    // If you touched ice: apply an obvious slow, then reset to the middle.
     if (!skate.resetting && !inSafeZone && skate.spawnShield <= 0) {
+      let hitIce = false;
       for (const z of skate.ice) {
-        if (circleRectHit(p.x, p.y, skate.pr, z)) {
-          skate.resetting = true;
-          skate.resetT = 0;
-          // Hard slow immediately
-          p.vx *= 0.18;
-          p.vy *= 0.18;
-          showToast("Slowed!");
-          break;
-        }
+        if (circleRectHit(p.x, p.y, skate.pr, z)) { hitIce = true; break; }
+      }
+      if (hitIce) {
+        skate.resetting = true;
+        skate.resetT = 0;
+        skate.iceSlowT = 0.75;
+        // Immediate speed cut so it feels like "sticky ice"
+        p.vx *= 0.35;
+        p.vy *= 0.35;
+        showToast("Slowed!");
       }
     }
 
-    // During reset: freeze you briefly then pop back to spawn
+    // During reset: you stay slow for a moment, then pop back to spawn
     if (skate.resetting) {
       skate.resetT += dt;
 
+      skate.iceSlowT = Math.max(0, (skate.iceSlowT || 0) - dt);
+
       // Heavy damping so you don't drift far
-      p.vx *= dampFactor(0.55, dt);
-      p.vy *= dampFactor(0.55, dt);
+      const slowDampBase = (skate.iceSlowT > 0) ? 0.42 : 0.55;
+      p.vx *= dampFactor(slowDampBase, dt);
+      p.vy *= dampFactor(slowDampBase, dt);
 
       integrate(p, skate.pr, dt, { x: 0, y: 0, w, h, pad: skate.pr });
 
-      if (skate.resetT >= 0.22) {
+      if (skate.resetT >= 0.35) {
         p.x = skate.spawn.x;
         p.y = skate.spawn.y;
         p.vx = 0;
@@ -1136,6 +1171,7 @@ function safeTokenPos(x, y, ice, radius) {
   function showOverlayForScene() {
     overlay.hidden = false;
     running = false;
+    unlockPageScroll();
 
     if (scene === 0) {
       overlayTitle.textContent = "Karaoke";
@@ -1154,6 +1190,7 @@ function safeTokenPos(x, y, ice, radius) {
     overlayAction = () => {
       overlay.hidden = true;
       running = true;
+      lockPageScroll();
       resetSceneState();
     };
   }
@@ -1162,6 +1199,7 @@ function safeTokenPos(x, y, ice, radius) {
   function showPhotoOverlay(title, caption, imgSrc, btnText, action) {
     overlay.hidden = false;
     overlayTitle.textContent = title;
+    unlockPageScroll();
 
     // Clear and rebuild overlay content
     overlayText.textContent = "";
@@ -1201,9 +1239,11 @@ function safeTokenPos(x, y, ice, radius) {
     overlayText.textContent = text;
     startBtn.textContent = btnText;
     overlayAction = action;
+    unlockPageScroll();
   }
 
   function resetAll() {
+    unlockPageScroll();
     score = 0;
     if (scoreEl) scoreEl.textContent = String(score);
 
