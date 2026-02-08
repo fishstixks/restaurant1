@@ -441,7 +441,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ---------------- Ice skating: moving slip zones, NOT blockers ---------------- */
   function makeIceZones(w, h) {
     const zones = [];
-    const count = 1; // ultra few for mobile
+    const count = 3; // increased ice blocks (still mobile-friendly)
 
     // Spawn safe zone (center of rink)
     const spawn = { x: w * 0.5, y: h * 0.55, r: 140 };
@@ -481,12 +481,21 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateIceZones(dt) {
     if (!skate) return;
     const w = W();
+
+    // Keep moving ice away from the spawn safe zone (so it never "hits" you on spawn)
+    const spawn = skate.spawn;
+
     for (const z of skate.ice) {
       z.x += z.vx * dt;
 
       // Wrap across FULL width (goes all the way)
       if (z.vx > 0 && z.x > w + 10) z.x = -z.w - 10;
       if (z.vx < 0 && z.x < -z.w - 10) z.x = w + 10;
+
+      // If a zone would pass through the safe zone, teleport it to the far side
+      if (spawn && circleRectHit(spawn.x, spawn.y, spawn.r + 24, z)) {
+        z.x = (z.vx > 0) ? (-z.w - 10) : (w + 10);
+      }
     }
   }
 
@@ -733,7 +742,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /* ---------------- Swimming (harder) ---------------- */
   function makeBuoys(pool) {
     const buoys = [];
-    const count = 1; // ultra few for mobile
+    const count = 3; // increased ice blocks (still mobile-friendly)
 
     for (let i = 0; i < count; i++) {
       const r = 22;
@@ -1107,7 +1116,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       if (subtitleEl) subtitleEl.textContent = "Final: Swimming tag. Harder now.";
       if (miniRow1) miniRow1.textContent = "Goal: Tag her (stay close briefly).";
-      if (miniRow2) miniRow2.textContent = "Buoys are faster and more.";
+      if (miniRow2) miniRow2.textContent = "Avoid the buoys (only 1 on mobile).";
     }
 
     resetSceneState();
@@ -1128,7 +1137,8 @@ document.addEventListener("DOMContentLoaded", () => {
       startBtn.textContent = "Start skating";
     } else {
       overlayTitle.textContent = "Swimming tag";
-      overlayText.textContent = "Harder: you must stay close briefly to tag her. Avoid fast buoys.";
+      overlayText.textContent = "Stay close briefly to tag her. Avoid the buoy.";
+
       startBtn.textContent = "Start swimming";
     }
 
@@ -1163,6 +1173,7 @@ document.addEventListener("DOMContentLoaded", () => {
     img.src = imgSrc;
     img.alt = title;
     img.style.maxWidth = "min(520px, 92vw)";
+    img.style.maxHeight = "55vh";
     img.style.width = "100%";
     img.style.borderRadius = "16px";
     img.style.boxShadow = "0 10px 30px rgba(0,0,0,0.25)";
