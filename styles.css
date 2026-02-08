@@ -4,17 +4,14 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   background: radial-gradient(circle at top, #ffe1ec 0%, #ffd1e1 35%, #ffc2d7 100%);
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
 }
 
-.wrap { min-height: 100vh; display: grid; place-items: center; padding: 14px; }
+.wrap { height: 100%; display: grid; place-items: center; padding: 14px; }
 
 .card {
   width: min(1020px, 96vw);
-  height: auto;
-  min-height: min(920px, 96vh);
+  height: min(920px, 96vh);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -75,9 +72,8 @@ h1 { margin: 0; text-align: center; font-size: clamp(24px, 3.2vw, 34px); color: 
 }
 
 .stage {
-  /* fixed stage height so canvas can size even when card is auto height */
-  height: clamp(320px, 55vh, 640px);
-min-height: 280px;
+  flex: 1;
+  min-height: 280px;
   border-radius: 18px;
   border: 1px solid rgba(255, 96, 155, 0.25);
   background: linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,230,242,0.6) 100%);
@@ -86,7 +82,7 @@ min-height: 280px;
   position: relative;
 }
 
-canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
+canvas { width: 100%; height: 100%; display: block; touch-action: none; }
 
 .miniHud { display: grid; place-items: center; gap: 6px; min-height: 44px; }
 .miniRow { color: #7a2b47; font-weight: 800; font-size: 14px; text-align: center; }
@@ -154,9 +150,6 @@ canvas { width: 100%; height: 100%; display: block; touch-action: pan-y; }
   backdrop-filter: blur(6px);
   padding: 18px;
   z-index: 50;
-
-  overflow-y: auto;
-  align-content: start;
 }
 .modal.show { display: grid; }
 

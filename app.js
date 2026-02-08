@@ -40,14 +40,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const rand = (a, b) => Math.random() * (b - a) + a;
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 
+  let stageW = 0;
+  let stageH = 0;
+
   const W = () => stageW;
   const H = () => stageH;
-function resizeCanvas() {
+
+  function resizeCanvas() {
     const rect = stage.getBoundingClientRect();
-    
-    stageW = rect.width;
-    stageH = rect.height;
-const dpr = Math.max(1, window.devicePixelRatio || 1);
+    stageW = rect.width || stage.offsetWidth || window.innerWidth;
+    stageH = rect.height || stage.offsetHeight || window.innerHeight;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.floor(rect.width * dpr);
     canvas.height = Math.floor(rect.height * dpr);
     canvas.style.width = `${rect.width}px`;
@@ -55,8 +58,12 @@ const dpr = Math.max(1, window.devicePixelRatio || 1);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener("resize", resizeCanvas);
-
-  function roundRect(x, y, w, h, r, fill) {
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", resizeCanvas);
+    window.visualViewport.addEventListener("scroll", resizeCanvas);
+  }
+  resizeCanvas();
+function roundRect(x, y, w, h, r, fill) {
     const rr = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
     ctx.moveTo(x + rr, y);
@@ -483,16 +490,18 @@ const dpr = Math.max(1, window.devicePixelRatio || 1);
   function updateIceZones(dt) {
     if (!skate) return;
     const w = W();
+
+    // Stable wrap range so viewport changes don't "ping-pong" zones at the edges.
     for (const z of skate.ice) {
       z.x += z.vx * dt;
 
-      // Wrap across FULL width (goes all the way)
-      if (z.vx > 0 && z.x > w + 10) z.x = -z.w - 10;
-      if (z.vx < 0 && z.x < -z.w - 10) z.x = w + 10;
+      const range = w + z.w + 20; // stage width + zone width + margins
+      let nx = (z.x + z.w + 10) % range;
+      if (nx < 0) nx += range;
+      z.x = nx - (z.w + 10);
     }
   }
-
-  function safeTokenPos(x, y, ice, radius) {
+function safeTokenPos(x, y, ice, radius) {
     for (const z of ice) {
       const r = { x: z.x - radius, y: z.y - radius, w: z.w + radius * 2, h: z.h + radius * 2 };
       if (circleRectHit(x, y, 1, r)) return false;
