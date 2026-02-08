@@ -63,6 +63,14 @@ document.addEventListener("DOMContentLoaded", () => {
     window.visualViewport.addEventListener("scroll", resizeCanvas);
   }
   resizeCanvas();
+
+  // Prevent page scrolling while dragging/playing on the canvas (iOS Safari needs passive:false).
+  ["touchstart","touchmove","touchend","touchcancel"].forEach((t) => {
+    canvas.addEventListener(t, (e) => {
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+  });
+
 function roundRect(x, y, w, h, r, fill) {
     const rr = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
@@ -450,7 +458,7 @@ function roundRect(x, y, w, h, r, fill) {
   /* ---------------- Ice skating: moving slip zones, NOT blockers ---------------- */
   function makeIceZones(w, h) {
     const zones = [];
-    const count = 1; // ultra few for mobile
+    const count = 5; // more moving ice zones for challenge
 
     // Spawn safe zone (center of rink)
     const spawn = { x: w * 0.5, y: h * 0.55, r: 140 };
@@ -744,7 +752,7 @@ function safeTokenPos(x, y, ice, radius) {
   /* ---------------- Swimming (harder) ---------------- */
   function makeBuoys(pool) {
     const buoys = [];
-    const count = 1; // ultra few for mobile
+    const count = 5; // more moving ice zones for challenge
 
     for (let i = 0; i < count; i++) {
       const r = 22;
@@ -1232,6 +1240,14 @@ function safeTokenPos(x, y, ice, radius) {
 
   /* ---------------- Boot ---------------- */
   resizeCanvas();
+
+  // Prevent page scrolling while dragging/playing on the canvas (iOS Safari needs passive:false).
+  ["touchstart","touchmove","touchend","touchcancel"].forEach((t) => {
+    canvas.addEventListener(t, (e) => {
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+  });
+
   if (scoreEl) scoreEl.textContent = String(score);
   if (valModal) valModal.classList.remove("show");
   if (flowersModal) flowersModal.classList.remove("show");
